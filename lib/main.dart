@@ -18,11 +18,11 @@ void main() async {
   // Get your token from https://account.mapbox.com/access-tokens/
   MapboxOptions.setAccessToken(MapboxConfig.accessToken);
 
-  runApp(const ArcBadmintonApp());
+  runApp(const SmatchBadmintonApp());
 }
 
-class ArcBadmintonApp extends StatelessWidget {
-  const ArcBadmintonApp({super.key});
+class SmatchBadmintonApp extends StatelessWidget {
+  const SmatchBadmintonApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +45,7 @@ class ArcBadmintonApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
-        title: 'Arc Badminton',
+        title: 'Smatch Badminton',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         home: const MapView(),

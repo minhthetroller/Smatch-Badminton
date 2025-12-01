@@ -1,4 +1,5 @@
 import '../core/constants/api_constants.dart';
+import '../models/availability.dart';
 import '../models/court.dart';
 import '../models/api_response.dart';
 import 'api_service.dart';
@@ -105,6 +106,22 @@ class CourtService {
     final response = await _apiService.delete('${ApiConstants.courts}/$id');
 
     return ApiResponse.fromJson(response, null);
+  }
+
+  /// Get court availability for a specific date
+  Future<ApiResponse<CourtAvailability>> getCourtAvailability({
+    required String courtId,
+    required String date,
+  }) async {
+    final response = await _apiService.get(
+      ApiConstants.courtAvailability(courtId),
+      queryParams: {'date': date},
+    );
+
+    return ApiResponse.fromJson(
+      response,
+      (data) => CourtAvailability.fromJson(data as Map<String, dynamic>),
+    );
   }
 
   /// Dispose service
