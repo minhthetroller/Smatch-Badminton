@@ -28,7 +28,7 @@ class BookingViewModel extends ChangeNotifier {
 
   // Time slot constants
   static const int slotDurationMinutes = 30;
-  static const double defaultPricePerSlot = 5.0; // Default price per 30-min slot
+  static const double defaultPricePerSlot = 35000.0; // Default price per 30-min slot in VND
 
   // Getters
   BookingViewState get state => _state;
@@ -64,9 +64,15 @@ class BookingViewModel extends ChangeNotifier {
   /// Get number of courts with selections
   int get selectedCourtCount => _selection.courtCount;
 
-  /// Format date for display
+  /// Format date for display (Vietnamese standard: dd/MM/yyyy)
   String get formattedDate {
-    return DateFormat('EEE, MMM d, yyyy').format(_selectedDate);
+    return DateFormat('dd/MM/yyyy').format(_selectedDate);
+  }
+
+  /// Format price to VND currency
+  static String formatPriceVND(double price) {
+    final formatter = NumberFormat('#,###', 'vi_VN');
+    return '${formatter.format(price.round())} ₫';
   }
 
   /// Format date for API
@@ -124,8 +130,8 @@ class BookingViewModel extends ChangeNotifier {
             startTime: '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}',
             endTime: '${endHour.toString().padLeft(2, '0')}:${(endMinute % 60).toString().padLeft(2, '0')}',
             isBooked: isBooked,
-            bookedBy: isBooked ? 'John D.' : null,
-            price: 5.0, // $5 per 30-min slot
+            bookedBy: isBooked ? null : null,
+            price: 35000.0, // 35,000 VND per 30-min slot
           ));
         }
       }
@@ -135,7 +141,7 @@ class BookingViewModel extends ChangeNotifier {
         name: 'Court ${index + 1}',
         courtNumber: index + 1,
         timeSlots: slots,
-        pricePerHour: 10.0,
+        pricePerHour: 70000.0, // 70,000 VND per hour
       );
     });
 
@@ -145,7 +151,7 @@ class BookingViewModel extends ChangeNotifier {
       openTime: '07:00',
       closeTime: '22:00',
       subCourts: mockSubCourts,
-      defaultPricePerHour: 10.0,
+      defaultPricePerHour: 70000.0, // 70,000 VND per hour
     );
     _state = BookingViewState.loaded;
     _errorMessage = null;
@@ -166,39 +172,38 @@ class BookingViewModel extends ChangeNotifier {
     await loadAvailability();
   }
 
-  /// Check if a time slot is available for selection (not booked)
+  /// Check if the selected date is today
+  bool get isToday {
+    final now = DateTime.now();
+    return _selectedDate.year == now.year &&
+           _selectedDate.month == now.month &&
+           _selectedDate.day == now.day;
+  }
+
+  /// Check if a time slot has passed (only applicable for today)
+  bool isSlotPassed(int hour, int minute) {
+    if (!isToday) return false;
+    
+    final now = DateTime.now();
+    final slotTime = DateTime(now.year, now.month, now.day, hour, minute);
+    return slotTime.isBefore(now);
+  }
+
+  /// Check if a time slot is available for selection (not booked and not passed)
   bool isSlotAvailable(int subCourtIndex, int hour, int minute) {
-    if (_availability == null) return false;
-    if (subCourtIndex < 0 || subCourtIndex >= subCourts.length) return false;
-
-    final subCourt = subCourts[subCourtIndex];
-    final timeStr = '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
-
-    // Check if this slot is booked
-    for (final slot in subCourt.timeSlots) {
-      if (slot.startTime == timeStr && slot.isBooked) {
-        return false;
-      }
-    }
-
-    return true;
+    // Check if time has passed (for today)
+    if (isSlotPassed(hour, minute)) return false;
+    
+    final slot = getBookingForSlot(subCourtIndex, hour, minute);
+    // Slot is available only if it exists in API data and is not booked
+    return slot != null && !slot.isBooked;
   }
 
   /// Check if a specific slot is booked
   bool isSlotBooked(int subCourtIndex, int hour, int minute) {
-    if (_availability == null) return false;
-    if (subCourtIndex < 0 || subCourtIndex >= subCourts.length) return false;
-
-    final subCourt = subCourts[subCourtIndex];
-    final timeStr = '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
-
-    for (final slot in subCourt.timeSlots) {
-      if (slot.startTime == timeStr && slot.isBooked) {
-        return true;
-      }
-    }
-
-    return false;
+    final slot = getBookingForSlot(subCourtIndex, hour, minute);
+    // Slot is booked if it exists and isBooked is true
+    return slot != null && slot.isBooked;
   }
 
   /// Get booking info for a specific time slot
@@ -218,13 +223,18 @@ class BookingViewModel extends ChangeNotifier {
     return null;
   }
 
+  /// Get price for a specific time slot from API data
+  double getSlotPrice(int subCourtIndex, int hour, int minute) {
+    final slot = getBookingForSlot(subCourtIndex, hour, minute);
+    return slot?.price ?? defaultPricePerSlot;
+  }
+
   /// Toggle selection for a specific slot
   void toggleSlotSelection(int subCourtIndex, int hour, int minute) {
     if (!isSlotAvailable(subCourtIndex, hour, minute)) return;
 
     final subCourt = subCourts[subCourtIndex];
-    final slotInfo = getBookingForSlot(subCourtIndex, hour, minute);
-    final price = slotInfo?.price ?? defaultPricePerSlot;
+    final price = getSlotPrice(subCourtIndex, hour, minute);
 
     final slot = SelectedSlot(
       subCourtIndex: subCourtIndex,
@@ -249,8 +259,38 @@ class BookingViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Minimum slots required per court (1 hour = 2 x 30-min slots)
+  static const int minSlotsPerCourt = 2;
+
   /// Check if we can proceed with booking
-  bool get canBook => _selection.isNotEmpty;
+  /// Requires at least 1 hour (2 slots) per court
+  bool get canBook {
+    if (_selection.isEmpty) return false;
+    
+    // Check each court has at least minSlotsPerCourt (1 hour)
+    final slotsByCourt = _selection.slotsByCourtIndex;
+    for (final courtSlots in slotsByCourt.values) {
+      if (courtSlots.length < minSlotsPerCourt) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// Get validation message if booking cannot proceed
+  String? get bookingValidationMessage {
+    if (_selection.isEmpty) return null;
+    
+    final slotsByCourt = _selection.slotsByCourtIndex;
+    for (final entry in slotsByCourt.entries) {
+      if (entry.value.length < minSlotsPerCourt) {
+        final courtName = entry.value.first.subCourtName;
+        final currentMinutes = entry.value.length * 30;
+        return '$courtName: Tối thiểu 1 giờ (hiện tại: ${currentMinutes} phút)';
+      }
+    }
+    return null;
+  }
 
   /// Get booking summaries for confirmation page
   List<CourtBookingSummary> get bookingSummaries => _selection.summaries;
@@ -264,7 +304,7 @@ class BookingViewModel extends ChangeNotifier {
     for (final summary in bookingSummaries) {
       debugPrint('  ${summary.subCourtName}: ${summary.timeRanges.map((r) => r.formatted).join(', ')}');
     }
-    debugPrint('Total price: \$$totalPrice');
+    debugPrint('Total price: ${formatPriceVND(totalPrice)}');
 
     return true;
   }

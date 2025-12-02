@@ -15,10 +15,12 @@ class TimeSlot {
   });
 
   factory TimeSlot.fromJson(Map<String, dynamic> json) {
+    // API returns 'isAvailable' - slot is booked when isAvailable is false
+    final isAvailable = json['isAvailable'] as bool? ?? true;
     return TimeSlot(
       startTime: json['startTime'] as String,
       endTime: json['endTime'] as String,
-      isBooked: json['isBooked'] as bool? ?? false,
+      isBooked: !isAvailable,
       bookedBy: json['bookedBy'] as String?,
       price: (json['price'] as num?)?.toDouble(),
     );
@@ -73,14 +75,17 @@ class SubCourt {
   });
 
   factory SubCourt.fromJson(Map<String, dynamic> json) {
+    // API returns 'slots' for time slot data
+    final slotsData = json['slots'] as List<dynamic>? ?? 
+                      json['timeSlots'] as List<dynamic>? ?? 
+                      [];
     return SubCourt(
       id: json['id'] as String,
       name: json['name'] as String,
       courtNumber: json['courtNumber'] as int? ?? 1,
-      timeSlots: (json['timeSlots'] as List<dynamic>?)
-              ?.map((e) => TimeSlot.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [],
+      timeSlots: slotsData
+              .map((e) => TimeSlot.fromJson(e as Map<String, dynamic>))
+              .toList(),
       pricePerHour: (json['pricePerHour'] as num?)?.toDouble(),
     );
   }

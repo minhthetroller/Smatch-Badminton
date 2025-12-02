@@ -3,25 +3,49 @@ import 'package:flutter/material.dart';
 import '../core/theme/app_theme.dart';
 import '../models/availability.dart';
 import '../models/court.dart';
+import '../view_models/booking_view_model.dart';
+import 'payment_view.dart';
 
-/// Booking confirmation page showing all selected slots
-class BookingConfirmationView extends StatelessWidget {
+/// Booking confirmation page showing all selected slots and guest info form
+class BookingConfirmationView extends StatefulWidget {
   final Court court;
   final String formattedDate;
+  final String apiFormattedDate;
   final List<CourtBookingSummary> summaries;
   final double totalPrice;
   final String totalDuration;
-  final VoidCallback onConfirm;
+  final List<SubCourt> subCourts;
 
   const BookingConfirmationView({
     super.key,
     required this.court,
     required this.formattedDate,
+    required this.apiFormattedDate,
     required this.summaries,
     required this.totalPrice,
     required this.totalDuration,
-    required this.onConfirm,
+    required this.subCourts,
   });
+
+  @override
+  State<BookingConfirmationView> createState() => _BookingConfirmationViewState();
+}
+
+class _BookingConfirmationViewState extends State<BookingConfirmationView> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
+  
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +85,10 @@ class BookingConfirmationView extends StatelessWidget {
 
                   // Booking details card
                   _buildBookingDetailsCard(),
+                  const SizedBox(height: 16),
+
+                  // Guest information form
+                  _buildGuestInfoCard(),
                   const SizedBox(height: 16),
 
                   // Price summary card
@@ -115,7 +143,7 @@ class BookingConfirmationView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  court.name,
+                  widget.court.name,
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -124,8 +152,8 @@ class BookingConfirmationView extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  court.fullAddress.isNotEmpty
-                      ? court.fullAddress
+                  widget.court.fullAddress.isNotEmpty
+                      ? widget.court.fullAddress
                       : 'Badminton Court',
                   style: TextStyle(
                     fontSize: 13,
@@ -161,7 +189,7 @@ class BookingConfirmationView extends StatelessWidget {
           Icon(Icons.calendar_today, color: Colors.grey.shade600, size: 20),
           const SizedBox(width: 12),
           Text(
-            formattedDate,
+            widget.formattedDate,
             style: const TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w500,
@@ -214,7 +242,7 @@ class BookingConfirmationView extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  '${summaries.length} ${summaries.length == 1 ? 'court' : 'courts'}',
+                  '${widget.summaries.length} ${widget.summaries.length == 1 ? 'court' : 'courts'}',
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -227,7 +255,7 @@ class BookingConfirmationView extends StatelessWidget {
           const SizedBox(height: 16),
 
           // Court details
-          ...summaries.map((summary) => _buildCourtDetail(summary)),
+          ...widget.summaries.map((summary) => _buildCourtDetail(summary)),
         ],
       ),
     );
@@ -314,7 +342,7 @@ class BookingConfirmationView extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               Text(
-                '\$${summary.totalPrice.toStringAsFixed(2)}',
+                BookingViewModel.formatPriceVND(summary.totalPrice),
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -328,8 +356,176 @@ class BookingConfirmationView extends StatelessWidget {
     );
   }
 
+  Widget _buildGuestInfoCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.person_outline,
+                  color: Color(0xFF2E7D32),
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Contact Information',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Name field
+            TextFormField(
+              controller: _nameController,
+              decoration: InputDecoration(
+                labelText: 'Full Name *',
+                hintText: 'Enter your name',
+                prefixIcon: const Icon(Icons.person_outline, size: 20),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFF2E7D32), width: 2),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Colors.red),
+                ),
+                filled: true,
+                fillColor: Colors.grey.shade50,
+              ),
+              textCapitalization: TextCapitalization.words,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Please enter your name';
+                }
+                if (value.trim().length < 2) {
+                  return 'Name must be at least 2 characters';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+
+            // Phone field
+            TextFormField(
+              controller: _phoneController,
+              decoration: InputDecoration(
+                labelText: 'Phone Number *',
+                hintText: '0901234567',
+                prefixIcon: const Icon(Icons.phone_outlined, size: 20),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFF2E7D32), width: 2),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Colors.red),
+                ),
+                filled: true,
+                fillColor: Colors.grey.shade50,
+              ),
+              keyboardType: TextInputType.phone,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Please enter your phone number';
+                }
+                // Vietnamese phone number validation
+                final phoneRegex = RegExp(r'^(0|\+84)[3|5|7|8|9][0-9]{8}$');
+                if (!phoneRegex.hasMatch(value.trim())) {
+                  return 'Please enter a valid Vietnamese phone number';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+
+            // Email field (optional)
+            TextFormField(
+              controller: _emailController,
+              decoration: InputDecoration(
+                labelText: 'Email (Optional)',
+                hintText: 'example@email.com',
+                prefixIcon: const Icon(Icons.email_outlined, size: 20),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFF2E7D32), width: 2),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Colors.red),
+                ),
+                filled: true,
+                fillColor: Colors.grey.shade50,
+              ),
+              keyboardType: TextInputType.emailAddress,
+              validator: (value) {
+                if (value != null && value.trim().isNotEmpty) {
+                  final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                  if (!emailRegex.hasMatch(value.trim())) {
+                    return 'Please enter a valid email';
+                  }
+                }
+                return null;
+              },
+            ),
+
+            const SizedBox(height: 12),
+            Text(
+              '* Required fields',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildPriceSummaryCard() {
-    final totalSlots = summaries.fold<int>(0, (sum, s) => sum + s.totalSlots);
+    final totalSlots = widget.summaries.fold<int>(0, (sum, s) => sum + s.totalSlots);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -369,7 +565,7 @@ class BookingConfirmationView extends StatelessWidget {
                 ),
               ),
               Text(
-                totalDuration,
+                widget.totalDuration,
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey.shade600,
@@ -380,7 +576,7 @@ class BookingConfirmationView extends StatelessWidget {
           const SizedBox(height: 8),
 
           // Courts breakdown
-          ...summaries.map((summary) => Padding(
+          ...widget.summaries.map((summary) => Padding(
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -393,7 +589,7 @@ class BookingConfirmationView extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '\$${summary.totalPrice.toStringAsFixed(2)}',
+                      BookingViewModel.formatPriceVND(summary.totalPrice),
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey.shade600,
@@ -418,7 +614,7 @@ class BookingConfirmationView extends StatelessWidget {
                 ),
               ),
               Text(
-                '\$${totalPrice.toStringAsFixed(2)}',
+                BookingViewModel.formatPriceVND(widget.totalPrice),
                 style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -450,58 +646,75 @@ class BookingConfirmationView extends StatelessWidget {
       child: SizedBox(
         width: double.infinity,
         child: ElevatedButton(
-          onPressed: () {
-            onConfirm();
-            // Show success and navigate back
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Row(
-                  children: [
-                    Icon(Icons.check_circle, color: Colors.white),
-                    SizedBox(width: 8),
-                    Text('Booking confirmed! 🎉'),
-                  ],
-                ),
-                backgroundColor: Color(0xFF2E7D32),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-            // Pop back to map view (2 screens back)
-            Navigator.of(context).popUntil((route) => route.isFirst);
-          },
+          onPressed: _isLoading ? null : _proceedToPayment,
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF2E7D32),
             foregroundColor: Colors.white,
+            disabledBackgroundColor: Colors.grey.shade300,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
             elevation: 0,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                'CONFIRM BOOKING',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5,
+          child: _isLoading
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.payment, size: 20),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'PROCEED TO PAYMENT',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '• ${BookingViewModel.formatPriceVND(widget.totalPrice)}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '• \$${totalPrice.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
+        ),
+      ),
+    );
+  }
+
+  void _proceedToPayment() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PaymentView(
+          court: widget.court,
+          formattedDate: widget.formattedDate,
+          apiFormattedDate: widget.apiFormattedDate,
+          summaries: widget.summaries,
+          totalPrice: widget.totalPrice,
+          guestName: _nameController.text.trim(),
+          guestPhone: _phoneController.text.trim(),
+          guestEmail: _emailController.text.trim().isNotEmpty
+              ? _emailController.text.trim()
+              : null,
+          subCourts: widget.subCourts,
         ),
       ),
     );
   }
 }
-

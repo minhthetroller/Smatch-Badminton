@@ -367,40 +367,42 @@ class _TimeSlotRow extends StatelessWidget {
     final isHourStart = minute == 0;
     final subCourtIndex = viewModel.selectedSubCourtIndex;
 
+    final isPassed = viewModel.isSlotPassed(hour, minute);
     final isBooked = viewModel.isSlotBooked(subCourtIndex, hour, minute);
     final isSelected = viewModel.isSlotSelected(subCourtIndex, hour, minute);
     final slot = viewModel.getBookingForSlot(subCourtIndex, hour, minute);
+    final isDisabled = isPassed || isBooked;
 
     return SizedBox(
       height: slotHeight,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Time label (only show for hour starts)
+          // Time label
           SizedBox(
             width: timeColumnWidth,
-            child: Padding(
-              padding: const EdgeInsets.only(right: 8, top: 0),
-              child: Text(
-                timeStr,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: isHourStart ? FontWeight.w500 : FontWeight.normal,
-                  color: isHourStart ? Colors.grey.shade700 : Colors.grey.shade400,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8, top: 0),
+                child: Text(
+                  timeStr,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: isHourStart ? FontWeight.w500 : FontWeight.normal,
+                    color: isPassed ? Colors.grey.shade400 : Colors.grey.shade700,
+                  ),
+                  textAlign: TextAlign.right,
                 ),
-                textAlign: TextAlign.right,
               ),
             ),
-          ),
 
           // Time slot area
           Expanded(
             child: GestureDetector(
-              onTap: () {
-                if (!isBooked) {
-                  viewModel.toggleSlotSelection(subCourtIndex, hour, minute);
-                }
-              },
+              onTap: isDisabled
+                  ? null
+                  : () {
+                      viewModel.toggleSlotSelection(subCourtIndex, hour, minute);
+                    },
               child: Container(
                 decoration: BoxDecoration(
                   border: Border(
@@ -413,7 +415,7 @@ class _TimeSlotRow extends StatelessWidget {
                     left: BorderSide(color: Colors.grey.shade200),
                   ),
                 ),
-                child: _buildSlotContent(isBooked, isSelected, slot),
+                child: _buildSlotContent(isPassed, isBooked, isSelected, slot),
               ),
             ),
           ),
@@ -422,7 +424,26 @@ class _TimeSlotRow extends StatelessWidget {
     );
   }
 
-  Widget _buildSlotContent(bool isBooked, bool isSelected, dynamic slot) {
+  Widget _buildSlotContent(bool isPassed, bool isBooked, bool isSelected, dynamic slot) {
+    // Passed time slot - disabled
+    if (isPassed) {
+      return Container(
+        margin: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Center(
+          child: Icon(
+            Icons.block,
+            color: Colors.grey.shade400,
+            size: 16,
+          ),
+        ),
+      );
+    }
+
+    // Booked slot
     if (isBooked) {
       return Container(
         margin: const EdgeInsets.all(2),
@@ -430,32 +451,20 @@ class _TimeSlotRow extends StatelessWidget {
           color: const Color(0xFFE57373),
           borderRadius: BorderRadius.circular(4),
         ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                'Booked',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              if (slot?.bookedBy != null)
-                Text(
-                  '(${slot!.bookedBy})',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    fontSize: 9,
-                  ),
-                ),
-            ],
+        child: const Center(
+          child: Text(
+            'Booked',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       );
     }
 
+    // Selected slot
     if (isSelected) {
       return Container(
         margin: const EdgeInsets.all(2),
@@ -600,7 +609,7 @@ class _BottomBookingBar extends StatelessWidget {
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              '${selection.courtCount} ${selection.courtCount == 1 ? 'court' : 'courts'}',
+                              '${selection.courtCount} ${selection.courtCount == 1 ? 'sân' : 'sân'}',
                               style: const TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
@@ -611,35 +620,46 @@ class _BottomBookingBar extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Text(
-                            selection.durationFormatted,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey.shade600,
+                      // Show validation message or price info
+                      if (viewModel.bookingValidationMessage != null)
+                        Text(
+                          viewModel.bookingValidationMessage!,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFFE57373),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        )
+                      else
+                        Row(
+                          children: [
+                            Text(
+                              selection.durationFormatted,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey.shade600,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '|',
-                            style: TextStyle(color: Colors.grey.shade400),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '\$${viewModel.totalPrice.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF2E7D32),
+                            const SizedBox(width: 8),
+                            Text(
+                              '|',
+                              style: TextStyle(color: Colors.grey.shade400),
                             ),
-                          ),
-                        ],
-                      ),
+                            const SizedBox(width: 8),
+                            Text(
+                              BookingViewModel.formatPriceVND(viewModel.totalPrice),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF2E7D32),
+                              ),
+                            ),
+                          ],
+                        ),
                     ],
                   )
                 : Text(
-                    'Tap to select time slots',
+                    'Chọn khung giờ (tối thiểu 1 giờ)',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey.shade600,
@@ -710,12 +730,11 @@ class _BottomBookingBar extends StatelessWidget {
         builder: (context) => BookingConfirmationView(
           court: viewModel.court,
           formattedDate: viewModel.formattedDate,
+          apiFormattedDate: viewModel.apiFormattedDate,
           summaries: viewModel.bookingSummaries,
           totalPrice: viewModel.totalPrice,
           totalDuration: viewModel.totalDurationFormatted,
-          onConfirm: () {
-            viewModel.confirmBooking();
-          },
+          subCourts: viewModel.subCourts,
         ),
       ),
     );
