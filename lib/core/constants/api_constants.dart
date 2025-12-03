@@ -21,6 +21,10 @@ class ApiConstants {
   static const String courts = '/api/courts';
   static const String nearbyCourts = '/api/courts/nearby';
 
+  /// Search endpoints
+  static const String searchAutocomplete = '/api/search/autocomplete';
+  static const String searchCourts = '/api/search/courts';
+
   /// Booking endpoints
   static const String bookings = '/api/bookings';
 

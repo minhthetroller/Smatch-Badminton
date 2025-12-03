@@ -5,6 +5,7 @@ import '../../core/theme/app_theme.dart';
 import '../../models/court.dart';
 
 /// Google Maps-style draggable bottom sheet for court details
+/// This widget is designed to be used as an overlay on top of other content
 class CourtBottomSheet extends StatefulWidget {
   final Court court;
   final VoidCallback? onClose;
@@ -47,16 +48,20 @@ class _CourtBottomSheetState extends State<CourtBottomSheet> {
     super.dispose();
   }
 
+  void _handleClose() {
+    widget.onClose?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.4,
+      initialChildSize: 0.45,
       minChildSize: 0.25,
       maxChildSize: 0.92,
       snap: true,
-      snapSizes: const [0.4, 0.65, 0.92],
+      snapSizes: const [0.45, 0.65, 0.92],
       controller: _controller,
       builder: (context, scrollController) {
         return Container(
@@ -257,7 +262,7 @@ class _CourtBottomSheetState extends State<CourtBottomSheet> {
             // Close button
             _CircularIconButton(
               icon: Icons.close,
-              onTap: widget.onClose,
+              onTap: _handleClose,
             ),
           ],
         ),

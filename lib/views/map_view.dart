@@ -12,8 +12,8 @@ import 'booking_view.dart';
 import 'widgets/bottom_nav_bar.dart';
 import 'widgets/category_chips.dart';
 import 'widgets/court_bottom_sheet.dart';
+import 'widgets/court_search_anchor.dart';
 import 'widgets/map_floating_buttons.dart';
-import 'widgets/map_search_bar.dart';
 
 /// Main map view that displays the Google Maps-like UI
 class MapView extends StatefulWidget {
@@ -48,15 +48,26 @@ class _MapViewState extends State<MapView> {
             bottom: false,
             child: Column(
               children: [
-                // Search bar
+                // Search bar with autocomplete
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Consumer<SearchViewModel>(
-                    builder: (context, searchVM, _) {
-                      return MapSearchBar(
+                  child: Consumer<MapViewModel>(
+                    builder: (context, mapVM, _) {
+                      return CourtSearchAnchor(
                         hintText: 'Search here',
-                        onTap: () {
-                          // TODO: Navigate to search screen
+                        selectedCourtName: mapVM.selectedCourt?.name,
+                        onSuggestionSelected: (suggestion) {
+                          // Fetch court details when a suggestion is selected
+                          // Pass coordinates to center map immediately
+                          mapVM.fetchCourtById(
+                            suggestion.id,
+                            latitude: suggestion.latitude,
+                            longitude: suggestion.longitude,
+                          );
+                        },
+                        onClear: () {
+                          // Clear selection when X button is pressed
+                          mapVM.clearSelection();
                         },
                         onVoiceSearch: () {
                           // TODO: Implement voice search
@@ -111,90 +122,88 @@ class _MapViewState extends State<MapView> {
             ),
           ),
 
-          // Court detail bottom sheet
+          // Court Details & Skeleton Area
           Consumer<MapViewModel>(
             builder: (context, mapVM, _) {
-              if (mapVM.selectedCourt == null) return const SizedBox.shrink();
+              Widget content = const SizedBox.shrink(key: ValueKey('empty'));
 
-              return CourtBottomSheet(
-                court: mapVM.selectedCourt!,
-                onClose: () => mapVM.clearSelection(),
-                onDirections: () {
-                  // TODO: Open directions
-                },
-                onBook: () {
-                  // Navigate to booking view
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => BookingView(
-                        court: mapVM.selectedCourt!,
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-
-          // Loading indicator for court details
-          Consumer<MapViewModel>(
-            builder: (context, mapVM, _) {
-              if (!mapVM.isLoadingCourtDetails) return const SizedBox.shrink();
-
-              return Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(20)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black26,
-                        blurRadius: 10,
-                        offset: Offset(0, -2),
-                      ),
-                    ],
-                  ),
-                  child: SafeArea(
-                    top: false,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppTheme.primaryColor,
-                          ),
+              if (mapVM.isLoadingCourtDetails) {
+                content = const _CourtLoadingSkeleton(key: ValueKey('skeleton'));
+              } else if (mapVM.selectedCourt != null) {
+                content = CourtBottomSheet(
+                  key: const ValueKey('sheet'),
+                  court: mapVM.selectedCourt!,
+                  onClose: () => mapVM.clearSelection(),
+                  onDirections: () {
+                    // TODO: Open directions
+                  },
+                  onBook: () {
+                    // Navigate to booking view
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => BookingView(
+                          court: mapVM.selectedCourt!,
                         ),
-                        const SizedBox(width: 12),
-                        const Text('Loading court details...'),
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  },
+                );
+              }
+
+              final bool hasContent =
+                  mapVM.isLoadingCourtDetails || mapVM.selectedCourt != null;
+
+              return Positioned.fill(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  switchInCurve: Curves.easeOutQuart,
+                  switchOutCurve: Curves.easeInQuart,
+                  transitionBuilder: (child, animation) {
+                    return SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, 1),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    );
+                  },
+                  child: hasContent
+                      ? Container(
+                          key: const ValueKey('content-container'),
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 200),
+                            child: content,
+                          ),
+                        )
+                      : const SizedBox.shrink(key: ValueKey('empty')),
                 ),
               );
             },
           ),
         ],
       ),
+      // Use extendBody to prevent map from resizing when bottom nav hides
+      extendBody: true,
       bottomNavigationBar: Consumer<MapViewModel>(
         builder: (context, mapVM, _) {
-          // Hide bottom nav when court is selected
-          if (mapVM.selectedCourt != null) return const SizedBox.shrink();
-          return MapBottomNavBar(
-            currentIndex: _currentNavIndex,
-            items: MapBottomNavBar.defaultItems,
-            onTap: (index) {
-              setState(() {
-                _currentNavIndex = index;
-              });
-            },
+          final isHidden = mapVM.selectedCourt != null || mapVM.isLoadingCourtDetails;
+          // Use AnimatedContainer to smoothly hide/show bottom nav without layout shift
+          return AnimatedSlide(
+            duration: const Duration(milliseconds: 200),
+            offset: isHidden ? const Offset(0, 1) : Offset.zero,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 200),
+              opacity: isHidden ? 0 : 1,
+              child: MapBottomNavBar(
+                currentIndex: _currentNavIndex,
+                items: MapBottomNavBar.defaultItems,
+                onTap: (index) {
+                  setState(() {
+                    _currentNavIndex = index;
+                  });
+                },
+              ),
+            ),
           );
         },
       ),
@@ -654,5 +663,210 @@ class _MapLayerState extends State<_MapLayer> {
     } catch (e) {
       debugPrint('Error adding courts text layer: $e');
     }
+  }
+}
+
+/// Loading skeleton that mimics the court bottom sheet structure with slide-up animation
+class _CourtLoadingSkeleton extends StatefulWidget {
+  const _CourtLoadingSkeleton({super.key});
+
+  @override
+  State<_CourtLoadingSkeleton> createState() => _CourtLoadingSkeletonState();
+}
+
+class _CourtLoadingSkeletonState extends State<_CourtLoadingSkeleton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _shimmerController;
+  late Animation<double> _shimmerAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    // Shimmer animation
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+    _shimmerAnimation = Tween<double>(begin: -1.0, end: 2.0).animate(
+      CurvedAnimation(parent: _shimmerController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Container(
+          height: screenHeight * 0.45,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 20,
+                offset: Offset(0, -5),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // Drag handle
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Header skeleton
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildShimmerBox(width: 200, height: 20),
+                          const SizedBox(height: 8),
+                          _buildShimmerBox(width: 150, height: 14),
+                          const SizedBox(height: 6),
+                          _buildShimmerBox(width: 180, height: 14),
+                        ],
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        _buildShimmerCircle(40),
+                        const SizedBox(width: 8),
+                        _buildShimmerCircle(40),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Action buttons skeleton
+              SizedBox(
+                height: 44,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    _buildShimmerBox(width: 80, height: 44, borderRadius: 22),
+                    const SizedBox(width: 10),
+                    _buildShimmerBox(width: 110, height: 44, borderRadius: 22),
+                    const SizedBox(width: 10),
+                    _buildShimmerBox(width: 70, height: 44, borderRadius: 22),
+                    const SizedBox(width: 10),
+                    _buildShimmerBox(width: 70, height: 44, borderRadius: 22),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Photo gallery skeleton
+              SizedBox(
+                height: 140,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    _buildShimmerBox(width: 180, height: 140, borderRadius: 12),
+                    const SizedBox(width: 10),
+                    _buildShimmerBox(width: 180, height: 140, borderRadius: 12),
+                    const SizedBox(width: 10),
+                    _buildShimmerBox(width: 100, height: 140, borderRadius: 12),
+                  ],
+                ),
+              ),
+
+              SizedBox(height: bottomPadding + 20),
+            ],
+          ),
+        ),
+      );
+  }
+
+  Widget _buildShimmerBox({
+    required double width,
+    required double height,
+    double borderRadius = 4,
+  }) {
+    return AnimatedBuilder(
+      animation: _shimmerAnimation,
+      builder: (context, child) {
+        return Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(borderRadius),
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                Colors.grey[300]!,
+                Colors.grey[100]!,
+                Colors.grey[300]!,
+              ],
+              stops: [
+                (_shimmerAnimation.value - 1).clamp(0.0, 1.0),
+                _shimmerAnimation.value.clamp(0.0, 1.0),
+                (_shimmerAnimation.value + 1).clamp(0.0, 1.0),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildShimmerCircle(double size) {
+    return AnimatedBuilder(
+      animation: _shimmerAnimation,
+      builder: (context, child) {
+        return Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                Colors.grey[300]!,
+                Colors.grey[100]!,
+                Colors.grey[300]!,
+              ],
+              stops: [
+                (_shimmerAnimation.value - 1).clamp(0.0, 1.0),
+                _shimmerAnimation.value.clamp(0.0, 1.0),
+                (_shimmerAnimation.value + 1).clamp(0.0, 1.0),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }
