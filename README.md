@@ -1,4 +1,4 @@
-# Arc Badminton
+# Smatch Badminton
 
 A Flutter application to find badminton courts near you, featuring a Google Maps-like UI with Mapbox integration and vector tiles from pg_tileserv.
 

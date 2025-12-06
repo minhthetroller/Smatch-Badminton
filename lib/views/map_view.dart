@@ -8,6 +8,7 @@ import '../core/constants/map_constants.dart';
 import '../core/theme/app_theme.dart';
 import '../view_models/map_view_model.dart';
 import '../view_models/search_view_model.dart';
+import 'booking_view.dart';
 import 'widgets/bottom_nav_bar.dart';
 import 'widgets/category_chips.dart';
 import 'widgets/court_bottom_sheet.dart';
@@ -122,11 +123,12 @@ class _MapViewState extends State<MapView> {
                   // TODO: Open directions
                 },
                 onBook: () {
-                  // TODO: Open booking
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Booking feature coming soon!'),
-                      behavior: SnackBarBehavior.floating,
+                  // Navigate to booking view
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => BookingView(
+                        court: mapVM.selectedCourt!,
+                      ),
                     ),
                   );
                 },

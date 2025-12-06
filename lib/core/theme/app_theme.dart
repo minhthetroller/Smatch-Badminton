@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 class AppTheme {
   AppTheme._();
 
-  /// Primary colors
-  static const Color primaryColor = Color(0xFF4285F4); // Google Blue
-  static const Color accentColor = Color(0xFF34A853); // Google Green
-  static const Color errorColor = Color(0xFFEA4335); // Google Red
-  static const Color warningColor = Color(0xFFFBBC05); // Google Yellow
+  /// Primary colors - Smatch brand colors
+  static const Color primaryColor = Color(0xFF2E7D32); // Smatch Green
+  static const Color primaryColorLight = Color(0xFF4CAF50); // Light Green
+  static const Color primaryColorDark = Color(0xFF1B5E20); // Dark Green
+  static const Color accentColor = Color(0xFF66BB6A); // Accent Green
+  static const Color errorColor = Color(0xFFE53935); // Red
+  static const Color warningColor = Color(0xFFFFA726); // Orange
 
   /// Background colors
   static const Color backgroundColor = Color(0xFFF8F9FA);

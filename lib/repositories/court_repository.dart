@@ -1,3 +1,4 @@
+import '../models/availability.dart';
 import '../models/court.dart';
 import '../services/court_service.dart';
 
@@ -86,6 +87,23 @@ class CourtRepository {
     }
 
     throw Exception(response.error?.message ?? 'Failed to fetch nearby courts');
+  }
+
+  /// Fetch court availability for a specific date
+  Future<CourtAvailability> fetchCourtAvailability({
+    required String courtId,
+    required String date,
+  }) async {
+    final response = await _courtService.getCourtAvailability(
+      courtId: courtId,
+      date: date,
+    );
+
+    if (response.success && response.data != null) {
+      return response.data!;
+    }
+
+    throw Exception(response.error?.message ?? 'Failed to fetch court availability');
   }
 
   /// Clear cache

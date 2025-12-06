@@ -22,7 +22,7 @@ android {
     defaultConfig {
         applicationId = "com.example.arc_badminton"
         // Mapbox Maps SDK requires minSdk 21
-        minSdk = 21
+        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

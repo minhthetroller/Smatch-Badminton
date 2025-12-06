@@ -23,7 +23,7 @@ class MapboxConfig {
   /// Mapbox public access token
   static const String accessToken = String.fromEnvironment(
     'DEFAULT_TOKEN',
-    defaultValue: _defaultToken,
+    defaultValue: 'pk.eyJ1IjoibnRtMTEwNSIsImEiOiJjbWlmaXRyNmowNDUyM2VwanJzZW04NzBpIn0.Amqbl3Er-JjNERTNbl21lA',
   );
 
   /// Check if access token is configured
