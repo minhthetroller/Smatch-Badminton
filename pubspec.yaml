@@ -30,6 +30,9 @@ dependencies:
   # Utilities
   url_launcher: ^6.2.5
   intl: ^0.19.0
+  
+  # WebSocket
+  web_socket_channel: ^3.0.2
 
 dev_dependencies:
   flutter_test:
