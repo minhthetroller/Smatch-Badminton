@@ -1,9 +1,14 @@
-/// API Constants for Arc Badminton Backend
+/// API Constants for Smatch Badminton Backend
 class ApiConstants {
   ApiConstants._();
 
   /// Base URL for the API server
-  static const String baseUrl = 'https://kevin-maladapted-instinctively.ngrok-free.dev';
+  /// Set via --dart-define=API_BASE_URL=https://your-api-url.com
+  /// Default is localhost for development - MUST be configured for production
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://localhost:3000',
+  );
 
   /// WebSocket URL for the API server
   static String get wsUrl {
