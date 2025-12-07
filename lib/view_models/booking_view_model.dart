@@ -286,7 +286,7 @@ class BookingViewModel extends ChangeNotifier {
       if (entry.value.length < minSlotsPerCourt) {
         final courtName = entry.value.first.subCourtName;
         final currentMinutes = entry.value.length * 30;
-        return '$courtName: Tối thiểu 1 giờ (hiện tại: ${currentMinutes} phút)';
+        return '$courtName: Tối thiểu 1 giờ (hiện tại: $currentMinutes phút)';
       }
     }
     return null;

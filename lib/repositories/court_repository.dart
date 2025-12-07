@@ -9,19 +9,15 @@ class CourtRepository {
 
   // In-memory cache
   List<Court> _cachedCourts = [];
-  Court? _selectedCourt;
+  
+  /// Currently selected court
+  Court? selectedCourt;
 
   CourtRepository({CourtService? courtService})
     : _courtService = courtService ?? CourtService();
 
   /// Get cached courts
   List<Court> get cachedCourts => List.unmodifiable(_cachedCourts);
-
-  /// Get selected court
-  Court? get selectedCourt => _selectedCourt;
-
-  /// Set selected court
-  set selectedCourt(Court? court) => _selectedCourt = court;
 
   /// Fetch courts from API
   Future<List<Court>> fetchCourts({
@@ -109,7 +105,7 @@ class CourtRepository {
   /// Clear cache
   void clearCache() {
     _cachedCourts = [];
-    _selectedCourt = null;
+    selectedCourt = null;
   }
 
   /// Dispose

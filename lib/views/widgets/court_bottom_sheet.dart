@@ -371,7 +371,7 @@ class _CourtBottomSheetState extends State<CourtBottomSheet> {
               child: Image.network(
                 _dummyPhotos[index],
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                errorBuilder: (_, e, s) => Container(
                   color: Colors.grey[300],
                   child: Icon(
                     Icons.sports_tennis,

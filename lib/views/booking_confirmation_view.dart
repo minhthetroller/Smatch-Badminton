@@ -37,7 +37,7 @@ class _BookingConfirmationViewState extends State<BookingConfirmationView> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   
-  bool _isLoading = false;
+  final bool _isLoading = false;
 
   @override
   void dispose() {

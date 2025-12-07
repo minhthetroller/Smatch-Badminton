@@ -490,11 +490,11 @@ class _MapLayerState extends State<_MapLayer> {
         LocationComponentSettings(
           enabled: true,
           pulsingEnabled: true,
-          pulsingColor: AppTheme.primaryColor.value,
+          pulsingColor: AppTheme.primaryColor.toARGB32(),
           pulsingMaxRadius: 50.0,
           showAccuracyRing: true,
-          accuracyRingColor: AppTheme.primaryColor.withValues(alpha: 0.2).value,
-          accuracyRingBorderColor: AppTheme.primaryColor.value,
+          accuracyRingColor: AppTheme.primaryColor.withValues(alpha: 0.2).toARGB32(),
+          accuracyRingBorderColor: AppTheme.primaryColor.toARGB32(),
         ),
       );
 
