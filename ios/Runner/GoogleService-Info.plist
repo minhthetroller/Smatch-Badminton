@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>286209752410-55kq1imam18ibt3kqj1t21dsn7op9bst.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.286209752410-55kq1imam18ibt3kqj1t21dsn7op9bst</string>
+	<key>API_KEY</key>
+	<string>AIzaSyA0Hno5eF9H96h8-L_LaQ6fcNCd6CTPhzc</string>
+	<key>GCM_SENDER_ID</key>
+	<string>286209752410</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.example.arcBadminton</string>
+	<key>PROJECT_ID</key>
+	<string>smatch-badminton</string>
+	<key>STORAGE_BUCKET</key>
+	<string>smatch-badminton.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:286209752410:ios:e93e540a72486a07a18763</string>
+</dict>
+</plist>

@@ -646,12 +646,15 @@ class _BottomBookingBar extends StatelessWidget {
                               style: TextStyle(color: Colors.grey.shade400),
                             ),
                             const SizedBox(width: 8),
-                            Text(
-                              BookingViewModel.formatPriceVND(viewModel.totalPrice),
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF2E7D32),
+                            Flexible(
+                              child: Text(
+                                BookingViewModel.formatPriceVND(viewModel.totalPrice),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF2E7D32),
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],

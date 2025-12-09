@@ -50,7 +50,7 @@ class _MapViewState extends State<MapView> {
               children: [
                 // Search bar with autocomplete
                 Padding(
-                  padding: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.only(top: 8, left: 16, right: 16),
                   child: Consumer<MapViewModel>(
                     builder: (context, mapVM, _) {
                       return CourtSearchAnchor(
