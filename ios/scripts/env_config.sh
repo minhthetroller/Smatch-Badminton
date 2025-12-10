@@ -18,9 +18,11 @@ if [ ! -f "$ENV_FILE" ]; then
     echo "Creating default .xcconfig with empty values"
     
     # Create .xcconfig with empty values for CI/CD environments
+    # These empty values are intentional - secrets should be configured in CI platform
     cat > "$XCCONFIG_FILE" <<EOF
 // Auto-generated environment configuration
 // This file is generated from .env file during build
+// Empty values below indicate missing .env file - configure secrets in CI platform
 
 FACEBOOK_APP_ID = 
 FACEBOOK_CLIENT_TOKEN = 
@@ -55,6 +57,8 @@ while IFS= read -r line || [ -n "$line" ]; do
     fi
     
     # Validate key contains only safe characters (uppercase letters, numbers, underscore)
+    # Uppercase-only enforced for security: prevents common attack vectors and ensures
+    # compatibility with Xcode's variable naming conventions
     if ! [[ $key =~ ^[A-Z][A-Z0-9_]*$ ]]; then
         echo "Warning: Skipping invalid key '$key' - must start with uppercase letter and contain only uppercase letters, numbers, and underscores"
         continue
