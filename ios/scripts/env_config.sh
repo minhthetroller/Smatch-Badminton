@@ -52,22 +52,26 @@ while IFS= read -r line || [ -n "$line" ]; do
         continue
     fi
     
-    # Validate key contains only safe characters (alphanumeric and underscore)
-    if ! [[ $key =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-        echo "Warning: Skipping invalid key '$key' - must contain only letters, numbers, and underscores"
+    # Validate key contains only safe characters (uppercase letters, numbers, underscore)
+    if ! [[ $key =~ ^[A-Z][A-Z0-9_]*$ ]]; then
+        echo "Warning: Skipping invalid key '$key' - must start with uppercase letter and contain only uppercase letters, numbers, and underscores"
         continue
     fi
     
     # Remove leading/trailing quotes from value (both single and double)
-    if [[ $value =~ ^\"(.*)\"$ ]] || [[ $value =~ ^\'(.*)\'$ ]]; then
-        value="${BASH_REMATCH[1]}"
+    # First try to remove double quotes
+    if [[ "${value:0:1}" == '"' && "${value: -1}" == '"' ]]; then
+        value="${value:1:${#value}-2}"
+    # Then try to remove single quotes
+    elif [[ "${value:0:1}" == "'" && "${value: -1}" == "'" ]]; then
+        value="${value:1:${#value}-2}"
     fi
     
     # Only include relevant keys
     if [[ $key == "FACEBOOK_APP_ID" ]] || [[ $key == "FACEBOOK_CLIENT_TOKEN" ]] || [[ $key == "GOOGLE_REVERSED_CLIENT_ID" ]]; then
-        # Escape any special characters in value for .xcconfig format
-        # Use printf for safe string handling
-        printf "%s = %s\n" "$key" "$value" >> "$XCCONFIG_FILE"
+        # Properly escape value for .xcconfig format by wrapping in quotes
+        # This prevents injection attacks and handles special characters safely
+        printf "%s = \"%s\"\n" "$key" "$value" >> "$XCCONFIG_FILE"
     fi
 done < "$ENV_FILE"
 
