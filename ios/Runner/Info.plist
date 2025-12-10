@@ -7,16 +7,16 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.286209752410-55kq1imam18ibt3kqj1t21dsn7op9bst</string>
+				<string>$(GOOGLE_REVERSED_CLIENT_ID)</string>
 			</array>
 			<key>CFBundleURLName</key>
 			<string></string>
 		</dict>
 	</array>
 	<key>FacebookAppID</key>
-	<string>2183742975450547</string>
+	<string>$(FACEBOOK_APP_ID)</string>
 	<key>FacebookClientToken</key>
-	<string>0b08fa6997dc5f8a55e8c62660c80c7d</string>
+	<string>$(FACEBOOK_CLIENT_TOKEN)</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_http._tcp</string>
