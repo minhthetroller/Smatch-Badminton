@@ -15,13 +15,11 @@ import 'payment_service_test.mocks.dart';
 void main() {
   late MockApiService mockApiService;
   late MockFirebaseAuth mockFirebaseAuth;
-  late MockUser mockUser;
   late PaymentService paymentService;
 
   setUp(() {
     mockApiService = MockApiService();
     mockFirebaseAuth = MockFirebaseAuth();
-    mockUser = MockUser();
     
     // Default behavior: no user logged in
     when(mockFirebaseAuth.currentUser).thenReturn(null);
