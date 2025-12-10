@@ -94,11 +94,9 @@ In GitHub Actions or other CI platforms:
 ```yaml
 - name: Create environment file
   run: |
-    cat > .env << EOF
-    FACEBOOK_APP_ID="${{ secrets.FACEBOOK_APP_ID }}"
-    FACEBOOK_CLIENT_TOKEN="${{ secrets.FACEBOOK_CLIENT_TOKEN }}"
-    GOOGLE_REVERSED_CLIENT_ID="${{ secrets.GOOGLE_REVERSED_CLIENT_ID }}"
-    EOF
+    echo "FACEBOOK_APP_ID=\"${{ secrets.FACEBOOK_APP_ID }}\"" >> .env
+    echo "FACEBOOK_CLIENT_TOKEN=\"${{ secrets.FACEBOOK_CLIENT_TOKEN }}\"" >> .env
+    echo "GOOGLE_REVERSED_CLIENT_ID=\"${{ secrets.GOOGLE_REVERSED_CLIENT_ID }}\"" >> .env
 
 - name: Build iOS
   run: flutter build ios

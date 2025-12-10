@@ -5,7 +5,8 @@
 
 set -e
 
-PROJECT_DIR="${SRCROOT}/.."
+# Resolve absolute paths to prevent path traversal
+PROJECT_DIR="$(cd "${SRCROOT}/.." && pwd)"
 ENV_FILE="${PROJECT_DIR}/.env"
 XCCONFIG_FILE="${SRCROOT}/Flutter/EnvConfig.xcconfig"
 
@@ -44,8 +45,9 @@ while IFS= read -r line || [ -n "$line" ]; do
     key="${line%%=*}"
     value="${line#*=}"
     
-    # Trim whitespace from key
-    key=$(echo "$key" | xargs)
+    # Trim whitespace from key using parameter expansion
+    key="${key#"${key%%[![:space:]]*}"}"
+    key="${key%"${key##*[![:space:]]}"}"
     
     # Skip if key is empty
     if [[ -z $key ]]; then
@@ -69,8 +71,10 @@ while IFS= read -r line || [ -n "$line" ]; do
     
     # Only include relevant keys
     if [[ $key == "FACEBOOK_APP_ID" ]] || [[ $key == "FACEBOOK_CLIENT_TOKEN" ]] || [[ $key == "GOOGLE_REVERSED_CLIENT_ID" ]]; then
-        # Properly escape value for .xcconfig format by wrapping in quotes
-        # This prevents injection attacks and handles special characters safely
+        # Escape quotes and backslashes in value to prevent .xcconfig format breakage
+        value="${value//\\/\\\\}"
+        value="${value//\"/\\\"}"
+        # Wrap value in quotes for .xcconfig format safety
         printf "%s = \"%s\"\n" "$key" "$value" >> "$XCCONFIG_FILE"
     fi
 done < "$ENV_FILE"
