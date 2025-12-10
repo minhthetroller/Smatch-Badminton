@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -11,6 +12,7 @@ import 'api_service.dart';
 /// Service for handling payments and WebSocket connections
 class PaymentService {
   final ApiService _apiService;
+  final FirebaseAuth _firebaseAuth;
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
   
@@ -21,8 +23,9 @@ class PaymentService {
   bool _isConnected = false;
   String? _currentPaymentId;
   
-  PaymentService({ApiService? apiService})
-      : _apiService = apiService ?? ApiService();
+  PaymentService({ApiService? apiService, FirebaseAuth? firebaseAuth})
+      : _apiService = apiService ?? ApiService(),
+        _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance;
 
   /// Stream of payment notifications
   Stream<PaymentNotification> get notificationStream => _notificationController.stream;
@@ -31,14 +34,46 @@ class PaymentService {
   bool get isConnected => _isConnected;
 
   /// Create a new booking
+  /// If user is authenticated, the booking will be linked to their account
   Future<Booking> createBooking(CreateBookingRequest request) async {
-    final response = await _apiService.post(
-      ApiConstants.bookings,
-      body: request.toJson(),
-    );
+    var authToken = ApiService.globalAuthToken;
+
+    // Ensure we have a token if a user is logged in (including anonymous)
+    if (authToken == null) {
+      final user = _firebaseAuth.currentUser;
+      if (user != null) {
+        authToken = await user.getIdToken();
+        ApiService.setGlobalAuthToken(authToken);
+      }
+    }
+    
+    // Debug logging to verify authentication
+    if (authToken != null) {
+      debugPrint('PaymentService: Creating booking with auth token (authenticated user)');
+    } else {
+      debugPrint('PaymentService: Creating booking WITHOUT auth token (guest)');
+    }
+    
+    final Map<String, dynamic> response;
+    if (authToken != null) {
+      // Authenticated request - booking will be linked to user
+      response = await _apiService.postWithAuth(
+        ApiConstants.bookings,
+        authToken: authToken,
+        body: request.toJson(),
+      );
+    } else {
+      // Unauthenticated request (fallback)
+      response = await _apiService.post(
+        ApiConstants.bookings,
+        body: request.toJson(),
+      );
+    }
 
     if (response['success'] == true && response['data'] != null) {
-      return Booking.fromJson(response['data'] as Map<String, dynamic>);
+      final booking = Booking.fromJson(response['data'] as Map<String, dynamic>);
+      debugPrint('PaymentService: Booking created successfully - ID: ${booking.id}');
+      return booking;
     }
     
     throw ApiException(

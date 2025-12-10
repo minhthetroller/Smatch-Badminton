@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../models/search_suggestion.dart';
+import '../../view_models/auth_view_model.dart';
 import '../../view_models/search_view_model.dart';
+import '../auth/profile_view.dart';
 
 /// Google Maps style search bar that opens a full-screen search overlay
 class CourtSearchAnchor extends StatelessWidget {
@@ -51,7 +53,7 @@ class CourtSearchAnchor extends StatelessWidget {
     return GestureDetector(
       onTap: () => _openSearchOverlay(context),
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16),
+        margin: const EdgeInsets.symmetric(horizontal: 0),
         height: 52,
         decoration: BoxDecoration(
           color: Colors.white,
@@ -436,19 +438,91 @@ class _ProfileAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: AppTheme.primaryColor, width: 2),
-      ),
-      child: ClipOval(
-        child: Container(
-          color: Colors.grey[200],
-          child: const Icon(Icons.person, size: 20, color: Colors.grey),
-        ),
-      ),
+    return Consumer<AuthViewModel>(
+      builder: (context, authViewModel, child) {
+        final user = authViewModel.user;
+        final isAnonymous = authViewModel.isAnonymous;
+
+        return GestureDetector(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (context) => const ProfileView()),
+            );
+          },
+          child: Stack(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isAnonymous ? Colors.grey.shade400 : AppTheme.primaryColor,
+                    width: 2,
+                  ),
+                  image: user?.photoUrl != null
+                      ? DecorationImage(
+                          image: NetworkImage(user!.photoUrl!),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                ),
+                child: user?.photoUrl == null
+                    ? ClipOval(
+                        child: Container(
+                          color: isAnonymous
+                              ? Colors.grey[200]
+                              : AppTheme.primaryColor.withValues(alpha: 0.1),
+                          child: Center(
+                            child: isAnonymous
+                                ? const Icon(Icons.person, size: 18, color: Colors.grey)
+                                : Text(
+                                    user?.initials ?? 'U',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.primaryColor,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      )
+                    : null,
+              ),
+              // Anonymous badge indicator
+              if (isAnonymous)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: Colors.orange,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                  ),
+                ),
+              // Authenticated indicator
+              if (!isAnonymous)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
