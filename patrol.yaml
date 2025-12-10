@@ -1,0 +1,7 @@
+app_name: smatch_badminton
+patrol:
+  android:
+    package_name: com.example.smatch_badminton
+  ios:
+    bundle_id: com.example.smatchBadminton
+

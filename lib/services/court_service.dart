@@ -2,6 +2,7 @@ import '../core/constants/api_constants.dart';
 import '../models/availability.dart';
 import '../models/court.dart';
 import '../models/api_response.dart';
+import '../models/search_suggestion.dart';
 import 'api_service.dart';
 
 /// Service for court-related API calls
@@ -121,6 +122,40 @@ class CourtService {
     return ApiResponse.fromJson(
       response,
       (data) => CourtAvailability.fromJson(data as Map<String, dynamic>),
+    );
+  }
+
+  /// Get autocomplete suggestions for search query
+  /// Supports Vietnamese diacritics - searches both accented and unaccented text
+  /// When includeDetails is true, response includes address and coordinates
+  Future<ApiResponse<List<SearchSuggestion>>> getAutocomplete({
+    required String query,
+    int limit = 10,
+    bool includeDetails = true,
+  }) async {
+    // API requires minimum 2 characters
+    if (query.length < 2) {
+      return ApiResponse(success: true, data: []);
+    }
+
+    final response = await _apiService.get(
+      ApiConstants.searchAutocomplete,
+      queryParams: {
+        'q': query,
+        'limit': limit.toString(),
+        'includeDetails': includeDetails.toString(),
+      },
+    );
+
+    return ApiResponse.fromJson(
+      response,
+      (data) {
+        final suggestions = data['suggestions'] as List?;
+        if (suggestions == null) return <SearchSuggestion>[];
+        return suggestions
+            .map((item) => SearchSuggestion.fromJson(item as Map<String, dynamic>))
+            .toList();
+      },
     );
   }
 

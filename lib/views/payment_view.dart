@@ -37,16 +37,24 @@ class PaymentView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Create booking requests for ALL selected courts, not just the first one
+    final bookingRequests = summaries.map((summary) {
+      final subCourt = subCourts[summary.subCourtIndex];
+      return BookingRequest(
+        subCourtId: subCourt.id,
+        startTime: summary.timeRanges.first.startTimeString,
+        endTime: summary.timeRanges.last.endTimeString,
+      );
+    }).toList();
+
     return ChangeNotifierProvider(
       create: (_) => PaymentViewModel()
-        ..initializePayment(
-          subCourtId: subCourts[summaries.first.subCourtIndex].id,
+        ..initializePaymentForMultipleCourts(
+          bookingRequests: bookingRequests,
           guestName: guestName,
           guestPhone: guestPhone,
           guestEmail: guestEmail,
           date: apiFormattedDate,
-          startTime: summaries.first.timeRanges.first.startTimeString,
-          endTime: summaries.first.timeRanges.last.endTimeString,
         ),
       child: _PaymentViewContent(
         court: court,

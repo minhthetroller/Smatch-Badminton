@@ -191,17 +191,32 @@ class MapViewModel extends ChangeNotifier {
   }
 
   /// Fetch court details by ID from API
-  Future<void> fetchCourtById(String courtId) async {
+  /// Optionally provide latitude/longitude to center the map immediately
+  Future<void> fetchCourtById(
+    String courtId, {
+    double? latitude,
+    double? longitude,
+  }) async {
+    // Skip if same court is already selected
+    if (_selectedCourt?.id == courtId) {
+      return;
+    }
+
     _isLoadingCourtDetails = true;
     notifyListeners();
+
+    // Center map immediately if coordinates provided (from search suggestion)
+    if (latitude != null && longitude != null) {
+      await moveToLocation(latitude, longitude, zoom: 16);
+    }
 
     try {
       final court = await _courtRepository.fetchCourtById(courtId);
       _selectedCourt = court;
       _courtRepository.selectedCourt = court;
 
-      // Move to court location if available
-      if (court.location != null) {
+      // Move to court location if available and coordinates weren't provided
+      if (latitude == null && longitude == null && court.location != null) {
         await moveToLocation(
           court.location!.latitude,
           court.location!.longitude,

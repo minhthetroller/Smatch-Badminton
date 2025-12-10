@@ -21,9 +21,10 @@ class MapboxConfig {
   static const String _defaultToken = 'DEFAULT_TOKEN';
 
   /// Mapbox public access token
+  /// Set via --dart-define=MAPBOX_ACCESS_TOKEN=pk.your_token_here
   static const String accessToken = String.fromEnvironment(
-    'DEFAULT_TOKEN',
-    defaultValue: 'pk.eyJ1IjoibnRtMTEwNSIsImEiOiJjbWlmaXRyNmowNDUyM2VwanJzZW04NzBpIn0.Amqbl3Er-JjNERTNbl21lA',
+    'MAPBOX_ACCESS_TOKEN',
+    defaultValue: _defaultToken,
   );
 
   /// Check if access token is configured

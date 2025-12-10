@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/category_item.dart';
 import '../models/court.dart';
+import '../models/search_suggestion.dart';
 import '../repositories/court_repository.dart';
+import '../services/court_service.dart';
 
 /// Search state
 enum SearchState { idle, searching, results, error }
@@ -10,14 +14,24 @@ enum SearchState { idle, searching, results, error }
 /// ViewModel for search functionality
 class SearchViewModel extends ChangeNotifier {
   final CourtRepository _courtRepository;
+  final CourtService _courtService;
 
-  SearchViewModel({CourtRepository? courtRepository})
-    : _courtRepository = courtRepository ?? CourtRepository();
+  /// Debounce timer for autocomplete
+  Timer? _debounceTimer;
+
+  /// Debounce duration (200ms as specified)
+  static const Duration _debounceDuration = Duration(milliseconds: 200);
+
+  SearchViewModel({CourtRepository? courtRepository, CourtService? courtService})
+    : _courtRepository = courtRepository ?? CourtRepository(),
+      _courtService = courtService ?? CourtService();
 
   // State
   SearchState _state = SearchState.idle;
   String _searchQuery = '';
   List<Court> _searchResults = [];
+  List<SearchSuggestion> _autocompleteSuggestions = [];
+  bool _isLoadingAutocomplete = false;
   String? _errorMessage;
   List<CategoryItem> _categories = CategoryItem.defaultCategories;
   String? _selectedCategoryId;
@@ -26,6 +40,8 @@ class SearchViewModel extends ChangeNotifier {
   SearchState get state => _state;
   String get searchQuery => _searchQuery;
   List<Court> get searchResults => _searchResults;
+  List<SearchSuggestion> get autocompleteSuggestions => _autocompleteSuggestions;
+  bool get isLoadingAutocomplete => _isLoadingAutocomplete;
   String? get errorMessage => _errorMessage;
   List<CategoryItem> get categories => _categories;
   String? get selectedCategoryId => _selectedCategoryId;
@@ -43,9 +59,66 @@ class SearchViewModel extends ChangeNotifier {
 
   /// Clear search
   void clearSearch() {
+    _debounceTimer?.cancel();
     _searchQuery = '';
     _searchResults = [];
+    _autocompleteSuggestions = [];
+    _isLoadingAutocomplete = false;
     _state = SearchState.idle;
+    notifyListeners();
+  }
+
+  /// Clear autocomplete suggestions
+  void clearAutocompleteSuggestions() {
+    _autocompleteSuggestions = [];
+    notifyListeners();
+  }
+
+  /// Search autocomplete with debouncing (200ms)
+  /// Supports both English and Vietnamese characters
+  void searchAutocomplete(String query) {
+    _searchQuery = query;
+
+    // Cancel previous timer
+    _debounceTimer?.cancel();
+
+    // Clear suggestions if query is too short
+    if (query.length < 2) {
+      _autocompleteSuggestions = [];
+      _isLoadingAutocomplete = false;
+      notifyListeners();
+      return;
+    }
+
+    // Set loading state
+    _isLoadingAutocomplete = true;
+    notifyListeners();
+
+    // Start debounce timer
+    _debounceTimer = Timer(_debounceDuration, () async {
+      await _performAutocomplete(query);
+    });
+  }
+
+  /// Perform the actual autocomplete API call
+  Future<void> _performAutocomplete(String query) async {
+    try {
+      final response = await _courtService.getAutocomplete(
+        query: query,
+        limit: 10,
+      );
+
+      if (response.success && response.data != null) {
+        _autocompleteSuggestions = response.data!;
+      } else {
+        _autocompleteSuggestions = [];
+      }
+    } catch (e) {
+      debugPrint('Autocomplete error: $e');
+      _autocompleteSuggestions = [];
+    }
+
+    _isLoadingAutocomplete = false;
     notifyListeners();
   }
 
@@ -123,7 +196,9 @@ class SearchViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _courtRepository.dispose();
+    _courtService.dispose();
     super.dispose();
   }
 }
