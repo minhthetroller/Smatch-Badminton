@@ -35,15 +35,45 @@ lib/
 - Flutter SDK ^3.10.1
 - Dart SDK ^3.10.1
 - Mapbox account (for access token)
+- Facebook Developer account (for OAuth)
+- Google Cloud account (for OAuth)
 - Backend server running at `http://192.168.1.7:3000`
 
-### 1. Get Mapbox Access Token
+### 1. Environment Configuration
 
-1. Create a Mapbox account at [mapbox.com](https://www.mapbox.com/)
-2. Go to [Account > Access Tokens](https://account.mapbox.com/access-tokens/)
-3. Create a new token or use the default public token
+**⚠️ Important: This project uses environment variables to securely manage API keys and secrets. Never commit hardcoded credentials.**
 
-### 2. Configure Mapbox Token
+1. Copy the environment template:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Fill in your credentials in `.env`:
+   ```bash
+   # Mapbox Configuration
+   MAPBOX_ACCESS_TOKEN=pk.your_mapbox_token_here
+   
+   # API Configuration
+   API_BASE_URL=http://localhost:3000
+   
+   # Facebook Configuration
+   FACEBOOK_APP_ID=your_facebook_app_id_here
+   FACEBOOK_CLIENT_TOKEN=your_facebook_client_token_here
+   
+   # Google OAuth Configuration
+   GOOGLE_REVERSED_CLIENT_ID=com.googleusercontent.apps.your_client_id_here
+   ```
+
+3. Get your credentials:
+   - **Mapbox**: [mapbox.com/account/access-tokens](https://account.mapbox.com/access-tokens/)
+   - **Facebook**: [developers.facebook.com](https://developers.facebook.com/)
+   - **Google**: [console.cloud.google.com](https://console.cloud.google.com/)
+
+### 2. iOS Configuration
+
+For iOS builds, environment variables are automatically injected into `Info.plist` at build time. See [ios/README.md](ios/README.md) for detailed setup instructions.
+
+### 3. Configure Mapbox Token
 
 #### Option A: Environment Variable (Recommended)
 
@@ -69,13 +99,13 @@ Add to `android/app/src/main/AndroidManifest.xml` inside `<application>`:
     android:value="YOUR_MAPBOX_ACCESS_TOKEN" />
 ```
 
-### 3. Install Dependencies
+### 4. Install Dependencies
 
 ```bash
 flutter pub get
 ```
 
-### 4. Run the App
+### 5. Run the App
 
 ```bash
 # iOS
