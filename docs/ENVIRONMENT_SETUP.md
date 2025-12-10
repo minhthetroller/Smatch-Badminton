@@ -95,9 +95,9 @@ In GitHub Actions or other CI platforms:
 - name: Create environment file
   run: |
     cat > .env << EOF
-    FACEBOOK_APP_ID=${{ secrets.FACEBOOK_APP_ID }}
-    FACEBOOK_CLIENT_TOKEN=${{ secrets.FACEBOOK_CLIENT_TOKEN }}
-    GOOGLE_REVERSED_CLIENT_ID=${{ secrets.GOOGLE_REVERSED_CLIENT_ID }}
+    FACEBOOK_APP_ID="${{ secrets.FACEBOOK_APP_ID }}"
+    FACEBOOK_CLIENT_TOKEN="${{ secrets.FACEBOOK_CLIENT_TOKEN }}"
+    GOOGLE_REVERSED_CLIENT_ID="${{ secrets.GOOGLE_REVERSED_CLIENT_ID }}"
     EOF
 
 - name: Build iOS

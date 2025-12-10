@@ -53,15 +53,15 @@ To enable automatic environment variable injection:
 
 For continuous integration environments (like GitHub Actions):
 
-- The script automatically handles missing `.env` files by creating empty placeholders
+- The script automatically handles missing `.env` files by creating empty values (not placeholder text)
 - You should set up environment secrets in your CI/CD platform
 - Create a step to generate the `.env` file before building:
   ```yaml
   - name: Create .env file
     run: |
-      echo "FACEBOOK_APP_ID=${{ secrets.FACEBOOK_APP_ID }}" >> .env
-      echo "FACEBOOK_CLIENT_TOKEN=${{ secrets.FACEBOOK_CLIENT_TOKEN }}" >> .env
-      echo "GOOGLE_REVERSED_CLIENT_ID=${{ secrets.GOOGLE_REVERSED_CLIENT_ID }}" >> .env
+      echo "FACEBOOK_APP_ID=\"${{ secrets.FACEBOOK_APP_ID }}\"" >> .env
+      echo "FACEBOOK_CLIENT_TOKEN=\"${{ secrets.FACEBOOK_CLIENT_TOKEN }}\"" >> .env
+      echo "GOOGLE_REVERSED_CLIENT_ID=\"${{ secrets.GOOGLE_REVERSED_CLIENT_ID }}\"" >> .env
   ```
 
 ### Security Notes
