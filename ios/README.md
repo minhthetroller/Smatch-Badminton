@@ -59,9 +59,11 @@ For continuous integration environments (like GitHub Actions):
   ```yaml
   - name: Create .env file
     run: |
-      echo "FACEBOOK_APP_ID=\"${{ secrets.FACEBOOK_APP_ID }}\"" >> .env
-      echo "FACEBOOK_CLIENT_TOKEN=\"${{ secrets.FACEBOOK_CLIENT_TOKEN }}\"" >> .env
-      echo "GOOGLE_REVERSED_CLIENT_ID=\"${{ secrets.GOOGLE_REVERSED_CLIENT_ID }}\"" >> .env
+      cat > .env << 'EOF'
+      FACEBOOK_APP_ID=${{ secrets.FACEBOOK_APP_ID }}
+      FACEBOOK_CLIENT_TOKEN=${{ secrets.FACEBOOK_CLIENT_TOKEN }}
+      GOOGLE_REVERSED_CLIENT_ID=${{ secrets.GOOGLE_REVERSED_CLIENT_ID }}
+      EOF
   ```
 
 ### Security Notes

@@ -61,17 +61,17 @@ while IFS= read -r line || [ -n "$line" ]; do
     fi
     
     # Remove leading/trailing quotes from value (both single and double)
-    # First try to remove double quotes
-    if [[ "${value:0:1}" == '"' && "${value: -1}" == '"' ]]; then
+    # Only remove matching quote pairs to avoid issues with mismatched quotes
+    if [[ "${value:0:1}" == '"' && "${value: -1}" == '"' && ${#value} -ge 2 ]]; then
         value="${value:1:${#value}-2}"
-    # Then try to remove single quotes
-    elif [[ "${value:0:1}" == "'" && "${value: -1}" == "'" ]]; then
+    elif [[ "${value:0:1}" == "'" && "${value: -1}" == "'" && ${#value} -ge 2 ]]; then
         value="${value:1:${#value}-2}"
     fi
     
     # Only include relevant keys
     if [[ $key == "FACEBOOK_APP_ID" ]] || [[ $key == "FACEBOOK_CLIENT_TOKEN" ]] || [[ $key == "GOOGLE_REVERSED_CLIENT_ID" ]]; then
-        # Escape quotes and backslashes in value to prevent .xcconfig format breakage
+        # Escape special characters for .xcconfig format
+        # Order matters: escape backslashes first, then quotes to avoid double-escaping
         value="${value//\\/\\\\}"
         value="${value//\"/\\\"}"
         # Wrap value in quotes for .xcconfig format safety
