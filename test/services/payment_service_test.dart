@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
@@ -10,14 +11,25 @@ import 'package:smatch_badminton/services/payment_service.dart';
 
 import 'payment_service_test.mocks.dart';
 
-@GenerateMocks([ApiService])
+@GenerateMocks([ApiService, FirebaseAuth, User])
 void main() {
   late MockApiService mockApiService;
+  late MockFirebaseAuth mockFirebaseAuth;
+  late MockUser mockUser;
   late PaymentService paymentService;
 
   setUp(() {
     mockApiService = MockApiService();
-    paymentService = PaymentService(apiService: mockApiService);
+    mockFirebaseAuth = MockFirebaseAuth();
+    mockUser = MockUser();
+    
+    // Default behavior: no user logged in
+    when(mockFirebaseAuth.currentUser).thenReturn(null);
+    
+    paymentService = PaymentService(
+      apiService: mockApiService,
+      firebaseAuth: mockFirebaseAuth,
+    );
   });
 
   tearDown(() {

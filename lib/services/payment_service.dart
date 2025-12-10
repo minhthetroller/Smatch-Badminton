@@ -12,6 +12,7 @@ import 'api_service.dart';
 /// Service for handling payments and WebSocket connections
 class PaymentService {
   final ApiService _apiService;
+  final FirebaseAuth _firebaseAuth;
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
   
@@ -22,8 +23,9 @@ class PaymentService {
   bool _isConnected = false;
   String? _currentPaymentId;
   
-  PaymentService({ApiService? apiService})
-      : _apiService = apiService ?? ApiService();
+  PaymentService({ApiService? apiService, FirebaseAuth? firebaseAuth})
+      : _apiService = apiService ?? ApiService(),
+        _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance;
 
   /// Stream of payment notifications
   Stream<PaymentNotification> get notificationStream => _notificationController.stream;
@@ -38,7 +40,7 @@ class PaymentService {
 
     // Ensure we have a token if a user is logged in (including anonymous)
     if (authToken == null) {
-      final user = FirebaseAuth.instance.currentUser;
+      final user = _firebaseAuth.currentUser;
       if (user != null) {
         authToken = await user.getIdToken();
         ApiService.setGlobalAuthToken(authToken);
