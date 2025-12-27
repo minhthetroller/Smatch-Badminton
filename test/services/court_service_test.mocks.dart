@@ -85,11 +85,15 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
       ) as _i4.Future<Map<String, dynamic>>);
 
   @override
-  _i4.Future<Map<String, dynamic>> delete(String? endpoint) =>
+  _i4.Future<Map<String, dynamic>> delete(
+    String? endpoint, {
+    Map<String, dynamic>? body,
+  }) =>
       (super.noSuchMethod(
         Invocation.method(
           #delete,
           [endpoint],
+          {#body: body},
         ),
         returnValue:
             _i4.Future<Map<String, dynamic>>.value(<String, dynamic>{}),

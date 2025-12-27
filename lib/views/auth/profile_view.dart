@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/user.dart';
 import '../../view_models/auth_view_model.dart';
+import '../matches/match_history_view.dart';
 import 'booking_history_view.dart';
 import 'login_view.dart';
 
@@ -317,6 +318,21 @@ class ProfileView extends StatelessWidget {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => const BookingHistoryView(),
+                ),
+              );
+            },
+          ),
+          _buildDivider(),
+
+          // Match History
+          _buildMenuItem(
+            icon: Icons.sports_tennis,
+            title: 'Match History',
+            subtitle: 'View matches you\'ve joined',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const MatchHistoryView(),
                 ),
               );
             },

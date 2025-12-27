@@ -6,6 +6,7 @@ import '../models/user.dart';
 import '../repositories/auth_repository.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/notification_service.dart';
 
 /// Authentication state
 enum AuthState {
@@ -20,12 +21,15 @@ enum AuthState {
 class AuthViewModel extends ChangeNotifier {
   final AuthService _authService;
   final AuthRepository _authRepository;
+  final NotificationService _notificationService;
 
   AuthViewModel({
     AuthService? authService,
     AuthRepository? authRepository,
+    NotificationService? notificationService,
   })  : _authService = authService ?? AuthService(),
-        _authRepository = authRepository ?? AuthRepository();
+        _authRepository = authRepository ?? AuthRepository(),
+        _notificationService = notificationService ?? NotificationService();
 
   // State
   AuthState _state = AuthState.initial;
@@ -42,6 +46,9 @@ class AuthViewModel extends ChangeNotifier {
   bool get isAuthenticated => _state == AuthState.authenticated && _user != null;
   bool get isAnonymous => _user?.isAnonymous ?? true;
   bool get isLoading => _state == AuthState.loading;
+  
+  /// Get the notification service for UI to listen to notifications
+  NotificationService get notificationService => _notificationService;
 
   /// Get current Firebase user
   User? get firebaseUser => _authService.currentUser;
@@ -49,6 +56,24 @@ class AuthViewModel extends ChangeNotifier {
   /// Get current auth token for API calls
   Future<String?> getAuthToken() async {
     return await _authService.getIdToken();
+  }
+
+  /// Refresh and update the auth token (forces token refresh)
+  Future<String?> refreshAuthToken() async {
+    try {
+      final firebaseUser = _authService.currentUser;
+      if (firebaseUser == null) return null;
+      
+      // Force token refresh
+      final token = await firebaseUser.getIdToken(true);
+      if (token != null) {
+        ApiService.setGlobalAuthToken(token);
+      }
+      return token;
+    } catch (e) {
+      debugPrint('Failed to refresh auth token: $e');
+      return null;
+    }
   }
 
   /// Initialize authentication - call this on app startup
@@ -59,6 +84,10 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Initialize notification service
+      await _notificationService.initialize();
+      _notificationService.listenToTokenRefresh();
+      
       // Listen to auth state changes
       _authStateSubscription = _authService.authStateChanges.listen(
         _onAuthStateChanged,
@@ -72,6 +101,8 @@ class AuthViewModel extends ChangeNotifier {
       if (currentUser != null) {
         try {
           await _syncUserWithBackend(currentUser);
+          // Register FCM token after successful sync
+          await _registerFcmToken();
         } catch (e) {
           // If sync fails for any reason, start fresh with anonymous user
           // This handles cases where Firebase user exists locally but was deleted from backend
@@ -683,6 +714,9 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Unregister FCM token before signing out
+      await _unregisterFcmToken();
+      
       await _authService.signOut();
       
       // Clear global auth token
@@ -751,10 +785,30 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
+  /// Register FCM token with backend
+  Future<void> _registerFcmToken() async {
+    try {
+      await _notificationService.registerToken();
+    } catch (e) {
+      debugPrint('Failed to register FCM token: $e');
+      // Non-critical error, don't fail authentication
+    }
+  }
+
+  /// Unregister FCM token from backend
+  Future<void> _unregisterFcmToken() async {
+    try {
+      await _notificationService.unregisterToken();
+    } catch (e) {
+      debugPrint('Failed to unregister FCM token: $e');
+      // Non-critical error, continue with sign out
+    }
+  }
+
   @override
   void dispose() {
     _authStateSubscription?.cancel();
+    _notificationService.dispose();
     super.dispose();
   }
 }
-

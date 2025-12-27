@@ -9,7 +9,6 @@ import '../core/theme/app_theme.dart';
 import '../view_models/map_view_model.dart';
 import '../view_models/search_view_model.dart';
 import 'booking_view.dart';
-import 'widgets/bottom_nav_bar.dart';
 import 'widgets/category_chips.dart';
 import 'widgets/court_bottom_sheet.dart';
 import 'widgets/court_search_anchor.dart';
@@ -24,8 +23,6 @@ class MapView extends StatefulWidget {
 }
 
 class _MapViewState extends State<MapView> {
-  int _currentNavIndex = 0;
-
   @override
   void initState() {
     super.initState();
@@ -181,31 +178,6 @@ class _MapViewState extends State<MapView> {
             },
           ),
         ],
-      ),
-      // Use extendBody to prevent map from resizing when bottom nav hides
-      extendBody: true,
-      bottomNavigationBar: Consumer<MapViewModel>(
-        builder: (context, mapVM, _) {
-          final isHidden = mapVM.selectedCourt != null || mapVM.isLoadingCourtDetails;
-          // Use AnimatedContainer to smoothly hide/show bottom nav without layout shift
-          return AnimatedSlide(
-            duration: const Duration(milliseconds: 200),
-            offset: isHidden ? const Offset(0, 1) : Offset.zero,
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 200),
-              opacity: isHidden ? 0 : 1,
-              child: MapBottomNavBar(
-                currentIndex: _currentNavIndex,
-                items: MapBottomNavBar.defaultItems,
-                onTap: (index) {
-                  setState(() {
-                    _currentNavIndex = index;
-                  });
-                },
-              ),
-            ),
-          );
-        },
       ),
     );
   }

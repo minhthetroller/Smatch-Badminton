@@ -102,11 +102,21 @@ class ApiService {
   }
 
   /// DELETE request
-  Future<Map<String, dynamic>> delete(String endpoint) async {
+  Future<Map<String, dynamic>> delete(
+    String endpoint, {
+    Map<String, dynamic>? body,
+  }) async {
     try {
       final uri = Uri.parse('$baseUrl$endpoint');
 
-      final response = await _client.delete(uri, headers: _defaultHeaders);
+      final request = http.Request('DELETE', uri);
+      request.headers.addAll(_defaultHeaders);
+      if (body != null) {
+        request.body = jsonEncode(body);
+      }
+
+      final streamedResponse = await _client.send(request);
+      final response = await http.Response.fromStream(streamedResponse);
 
       return _handleResponse(response);
     } on SocketException {

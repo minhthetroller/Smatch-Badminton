@@ -11,8 +11,9 @@ import 'services/court_service.dart';
 import 'services/location_service.dart';
 import 'view_models/auth_view_model.dart';
 import 'view_models/map_view_model.dart';
+import 'view_models/match_view_model.dart';
 import 'view_models/search_view_model.dart';
-import 'views/map_view.dart';
+import 'views/main_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,6 +52,10 @@ class SmatchBadmintonApp extends StatelessWidget {
             courtRepository: courtRepository,
             locationService: locationService,
           ),
+        ),
+        // Match View Model
+        ChangeNotifierProvider(
+          create: (_) => MatchViewModel(),
         ),
         // Search View Model
         ChangeNotifierProvider(
@@ -100,7 +105,7 @@ class AuthWrapper extends StatelessWidget {
         }
 
         // Show main app once initialized
-        return const MapView();
+        return const MainScreen();
       },
     );
   }

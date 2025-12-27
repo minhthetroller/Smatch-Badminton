@@ -17,7 +17,7 @@ class BottomNavItem {
   });
 }
 
-/// Custom bottom navigation bar similar to Google Maps
+/// Custom bottom navigation bar with sliding indicator animation
 class MapBottomNavBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int>? onTap;
@@ -40,7 +40,7 @@ class MapBottomNavBar extends StatelessWidget {
     this.fontSize = 11,
   });
 
-  /// Default navigation items similar to Google Maps
+  /// Default navigation items - Explore and Matches
   static List<BottomNavItem> get defaultItems => [
     const BottomNavItem(
       icon: Icons.explore_outlined,
@@ -49,20 +49,17 @@ class MapBottomNavBar extends StatelessWidget {
       activeColor: AppTheme.primaryColor,
     ),
     const BottomNavItem(
-      icon: Icons.bookmark_outline,
-      activeIcon: Icons.bookmark,
-      label: 'You',
-    ),
-    const BottomNavItem(
-      icon: Icons.add_circle_outline,
-      activeIcon: Icons.add_circle,
-      label: 'Contribute',
+      icon: Icons.sports_tennis_outlined,
+      activeIcon: Icons.sports_tennis,
+      label: 'Matches',
+      activeColor: AppTheme.primaryColor,
     ),
   ];
 
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final itemWidth = MediaQuery.of(context).size.width / items.length;
 
     return Container(
       decoration: BoxDecoration(
@@ -76,23 +73,55 @@ class MapBottomNavBar extends StatelessWidget {
         ],
       ),
       child: Padding(
-        padding: EdgeInsets.only(bottom: bottomPadding, top: 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: List.generate(items.length, (index) {
-            final item = items[index];
-            final isSelected = currentIndex == index;
+        padding: EdgeInsets.only(bottom: bottomPadding, top: 0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Animated sliding indicator
+            Stack(
+              children: [
+                // Indicator background line
+                Container(
+                  height: 3,
+                  color: Colors.transparent,
+                ),
+                // Animated indicator
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOut,
+                  left: itemWidth * currentIndex + (itemWidth - 24) / 2,
+                  child: Container(
+                    height: 3,
+                    width: 24,
+                    decoration: BoxDecoration(
+                      color: items[currentIndex].activeColor ?? selectedColor ?? AppTheme.primaryColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // Navigation items row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: List.generate(items.length, (index) {
+                final item = items[index];
+                final isSelected = currentIndex == index;
 
-            return _NavBarItem(
-              item: item,
-              isSelected: isSelected,
-              selectedColor: selectedColor ?? AppTheme.primaryColor,
-              unselectedColor: unselectedColor ?? AppTheme.textSecondary,
-              iconSize: iconSize,
-              fontSize: fontSize,
-              onTap: () => onTap?.call(index),
-            );
-          }),
+                return _NavBarItem(
+                  item: item,
+                  isSelected: isSelected,
+                  selectedColor: selectedColor ?? AppTheme.primaryColor,
+                  unselectedColor: unselectedColor ?? AppTheme.textSecondary,
+                  iconSize: iconSize,
+                  fontSize: fontSize,
+                  onTap: () => onTap?.call(index),
+                  itemWidth: itemWidth,
+                );
+              }),
+            ),
+          ],
         ),
       ),
     );
@@ -107,6 +136,7 @@ class _NavBarItem extends StatelessWidget {
   final double iconSize;
   final double fontSize;
   final VoidCallback? onTap;
+  final double itemWidth;
 
   const _NavBarItem({
     required this.item,
@@ -115,6 +145,7 @@ class _NavBarItem extends StatelessWidget {
     required this.unselectedColor,
     required this.iconSize,
     required this.fontSize,
+    required this.itemWidth,
     this.onTap,
   });
 
@@ -127,39 +158,36 @@ class _NavBarItem extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Selection indicator
-            if (isSelected)
-              Container(
-                height: 3,
-                width: 20,
-                margin: const EdgeInsets.only(bottom: 2),
-                decoration: BoxDecoration(
+      child: SizedBox(
+        width: itemWidth,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Animated icon with scale effect
+              AnimatedScale(
+                duration: const Duration(milliseconds: 200),
+                scale: isSelected ? 1.1 : 1.0,
+                child: Icon(
+                  isSelected ? (item.activeIcon ?? item.icon) : item.icon,
+                  size: iconSize,
                   color: color,
-                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-            // Icon
-            Icon(
-              isSelected ? (item.activeIcon ?? item.icon) : item.icon,
-              size: iconSize,
-              color: color,
-            ),
-            const SizedBox(height: 2),
-            // Label
-            Text(
-              item.label,
-              style: TextStyle(
-                color: color,
-                fontSize: fontSize,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              const SizedBox(height: 2),
+              // Label with animated color
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 200),
+                style: TextStyle(
+                  color: color,
+                  fontSize: fontSize,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                ),
+                child: Text(item.label),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

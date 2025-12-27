@@ -72,4 +72,32 @@ class ApiConstants {
   /// Map tiles template URL for Mapbox
   static String get mapTilesTemplate =>
       '$baseUrl/api/map-tiles/{z}/{x}/{y}.pbf';
+
+  /// Match endpoints
+  static const String matches = '/api/matches';
+  static const String matchesHosted = '/api/matches/hosted';
+  static const String matchesJoined = '/api/matches/joined';
+
+  /// Get match by ID
+  static String matchById(String id) => '/api/matches/$id';
+
+  /// Join a match
+  static String matchJoin(String id) => '/api/matches/$id/join';
+
+  /// Leave a match
+  static String matchLeave(String id) => '/api/matches/$id/leave';
+
+  /// Respond to a join request
+  static String matchRespondToRequest(String matchId, String playerId) =>
+      '/api/matches/$matchId/requests/$playerId/respond';
+
+  /// Create payment for joining a match
+  static String matchPayment(String matchId) => '/api/matches/$matchId/payment';
+
+  /// Query match payment status
+  static String matchPaymentStatus(String matchId, String paymentId) =>
+      '/api/matches/$matchId/payment/$paymentId/status';
+
+  /// FCM token endpoints
+  static const String authFcmToken = '/api/auth/fcm-token';
 }
