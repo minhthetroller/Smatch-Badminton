@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/image_url_helper.dart';
 import '../../models/search_suggestion.dart';
 import '../../view_models/auth_view_model.dart';
 import '../../view_models/search_view_model.dart';
@@ -462,7 +463,10 @@ class _ProfileAvatar extends StatelessWidget {
                   ),
                   image: user?.photoUrl != null
                       ? DecorationImage(
-                          image: NetworkImage(user!.photoUrl!),
+                          image: NetworkImage(
+                            ImageUrlHelper.transformImageUrl(user!.photoUrl!),
+                            headers: ImageUrlHelper.imageHeaders,
+                          ),
                           fit: BoxFit.cover,
                         )
                       : null,

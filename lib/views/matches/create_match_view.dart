@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 import '../../core/theme/app_theme.dart';
 import '../../models/court.dart';
 import '../../models/match.dart';
+import '../../services/api_service.dart';
 import '../../view_models/auth_view_model.dart';
 import '../../view_models/match_view_model.dart';
 import '../../view_models/search_view_model.dart';
@@ -21,6 +24,7 @@ class CreateMatchView extends StatefulWidget {
 class _CreateMatchViewState extends State<CreateMatchView> {
   final _formKey = GlobalKey<FormState>();
   final _scrollController = ScrollController();
+  final _imagePicker = ImagePicker();
 
   // Form controllers
   final _titleController = TextEditingController();
@@ -38,6 +42,7 @@ class _CreateMatchViewState extends State<CreateMatchView> {
   TimeOfDay _endTime = const TimeOfDay(hour: 21, minute: 0);
   bool _isPrivate = false;
   bool _isSubmitting = false;
+  final List<File> _selectedImages = [];
 
   @override
   void dispose() {
@@ -90,6 +95,12 @@ class _CreateMatchViewState extends State<CreateMatchView> {
             _buildSectionTitle('Description'),
             const SizedBox(height: 8),
             _buildDescriptionField(),
+            const SizedBox(height: 20),
+
+            // Images
+            _buildSectionTitle('Images (Optional, up to 3)'),
+            const SizedBox(height: 8),
+            _buildImagePicker(),
             const SizedBox(height: 20),
 
             // Date and Time
@@ -550,11 +561,162 @@ class _CreateMatchViewState extends State<CreateMatchView> {
           Switch(
             value: _isPrivate,
             onChanged: (value) => setState(() => _isPrivate = value),
-            activeColor: AppTheme.primaryColor,
+            activeTrackColor: AppTheme.primaryColor,
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildImagePicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Image thumbnails
+        if (_selectedImages.isNotEmpty)
+          SizedBox(
+            height: 120,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _selectedImages.length,
+              itemBuilder: (context, index) {
+                return Container(
+                  margin: const EdgeInsets.only(right: 12),
+                  width: 120,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    image: DecorationImage(
+                      image: FileImage(_selectedImages[index]),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedImages.removeAt(index);
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        if (_selectedImages.isNotEmpty) const SizedBox(height: 12),
+        
+        // Add image buttons
+        if (_selectedImages.length < 3)
+          Row(
+            children: [
+              // Camera button
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _pickImage(ImageSource.camera),
+                  icon: const Icon(Icons.camera_alt),
+                  label: const Text('Camera'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    side: BorderSide(color: Colors.grey.shade300),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              
+              // Gallery button
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _pickImage(ImageSource.gallery),
+                  icon: const Icon(Icons.photo_library),
+                  label: const Text('Gallery'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    side: BorderSide(color: Colors.grey.shade300),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        
+        // Helper text
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            '${_selectedImages.length}/3 images selected',
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppTheme.textHint,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+      
+      if (image != null) {
+        final file = File(image.path);
+        
+        // Validate file size (5MB max)
+        final fileSize = await file.length();
+        if (fileSize > 5 * 1024 * 1024) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Image size must be less than 5MB'),
+                backgroundColor: AppTheme.errorColor,
+              ),
+            );
+          }
+          return;
+        }
+        
+        setState(() {
+          _selectedImages.add(file);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to pick image: $e'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildSubmitButton() {
@@ -722,9 +884,14 @@ class _CreateMatchViewState extends State<CreateMatchView> {
 
     setState(() => _isSubmitting = true);
 
+    // Capture context-dependent objects before async operations
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
     try {
       // Refresh auth token before creating match to avoid expired token errors
       final authVM = context.read<AuthViewModel>();
+      final matchVM = context.read<MatchViewModel>();
       final token = await authVM.refreshAuthToken();
       
       if (token == null) {
@@ -747,24 +914,31 @@ class _CreateMatchViewState extends State<CreateMatchView> {
         price: int.parse(_priceController.text.replaceAll('.', '')),
         slotsNeeded: int.parse(_slotsController.text),
       );
+      
+      // Use different methods based on whether images are selected
+      final MatchWithDetails? match;
+      if (_selectedImages.isNotEmpty) {
+        match = await matchVM.createMatchWithImages(request, _selectedImages);
+      } else {
+        match = await matchVM.createMatch(request);
+      }
 
-      final matchVM = context.read<MatchViewModel>();
-      final match = await matchVM.createMatch(request);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if (!mounted) return;
+      if (match != null) {
+        scaffoldMessenger.showSnackBar(
           const SnackBar(
             content: Text('Match created successfully!'),
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.of(context).pop(match);
+        navigator.pop(match);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        final message = e is ApiException ? e.message : e.toString();
+        scaffoldMessenger.showSnackBar(
           SnackBar(
-            content: Text('Failed to create match: $e'),
+            content: Text('Failed to create match: $message'),
             backgroundColor: AppTheme.errorColor,
           ),
         );

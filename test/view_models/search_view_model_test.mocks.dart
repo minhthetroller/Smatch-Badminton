@@ -244,6 +244,7 @@ class MockCourtService extends _i1.Mock implements _i7.CourtService {
     required double? latitude,
     required double? longitude,
     double? radius = 5.0,
+    bool? radiusIsMeters = false,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -253,6 +254,7 @@ class MockCourtService extends _i1.Mock implements _i7.CourtService {
             #latitude: latitude,
             #longitude: longitude,
             #radius: radius,
+            #radiusIsMeters: radiusIsMeters,
           },
         ),
         returnValue: _i6.Future<_i4.ApiResponse<List<_i2.Court>>>.value(
@@ -265,6 +267,7 @@ class MockCourtService extends _i1.Mock implements _i7.CourtService {
               #latitude: latitude,
               #longitude: longitude,
               #radius: radius,
+              #radiusIsMeters: radiusIsMeters,
             },
           ),
         )),

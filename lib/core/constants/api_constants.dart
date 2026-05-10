@@ -29,6 +29,7 @@ class ApiConstants {
   static const String authAnonymous = '/api/auth/anonymous';
   static const String authConvert = '/api/auth/convert';
   static const String authMe = '/api/auth/me';
+  static const String authMePhoto = '/api/auth/me/photo';
   static const String authMeBookings = '/api/auth/me/bookings';
   static const String authUsernameCheck = '/api/auth/username/check';
   static const String authUsernameLookup = '/api/auth/username/lookup';
@@ -65,11 +66,12 @@ class ApiConstants {
   static String courtAvailability(String courtId) =>
       '/api/courts/$courtId/availability';
 
-  /// Map tiles endpoint pattern: /api/map-tiles/{z}/{x}/{y}.pbf
+  /// Map tiles endpoint — proxied through the backend (backend forwards to pg_tileserv internally)
+  /// External: :3000/api/map-tiles/{z}/{x}/{y}.pbf → Internal: localhost:7800/public.courts/{z}/{x}/{y}.pbf
   static String mapTilesUrl(int z, int x, int y) =>
       '$baseUrl/api/map-tiles/$z/$x/$y.pbf';
 
-  /// Map tiles template URL for Mapbox
+  /// Map tiles template URL for Mapbox (routed through backend proxy)
   static String get mapTilesTemplate =>
       '$baseUrl/api/map-tiles/{z}/{x}/{y}.pbf';
 
@@ -87,6 +89,9 @@ class ApiConstants {
   /// Leave a match
   static String matchLeave(String id) => '/api/matches/$id/leave';
 
+  /// Get join requests for a match (host only)
+  static String matchJoinRequests(String matchId) => '/api/matches/$matchId/requests';
+
   /// Respond to a join request
   static String matchRespondToRequest(String matchId, String playerId) =>
       '/api/matches/$matchId/requests/$playerId/respond';
@@ -100,4 +105,7 @@ class ApiConstants {
 
   /// FCM token endpoints
   static const String authFcmToken = '/api/auth/fcm-token';
+
+  /// Match image upload endpoint — returns public S3 URL for the uploaded file
+  static const String matchImageUpload = '/api/uploads/match-image';
 }

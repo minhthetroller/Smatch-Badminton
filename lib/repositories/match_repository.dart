@@ -1,5 +1,6 @@
 import '../models/match.dart';
 import '../services/match_service.dart';
+import 'dart:io';
 
 /// Repository for match data operations
 /// Acts as a single source of truth, abstracting data sources
@@ -71,12 +72,16 @@ class MatchRepository {
   Future<List<MatchWithDetails>> fetchHostedMatches({
     MatchStatus? status,
     bool forceRefresh = false,
+    bool includeExpired = false,
   }) async {
     if (!forceRefresh && _cachedHostedMatches.isNotEmpty) {
       return _cachedHostedMatches;
     }
 
-    final response = await _matchService.getHostedMatches(status: status);
+    final response = await _matchService.getHostedMatches(
+      status: status,
+      includeExpired: includeExpired,
+    );
 
     if (response.success && response.data != null) {
       _cachedHostedMatches = response.data!;
@@ -89,12 +94,15 @@ class MatchRepository {
   /// Fetch joined matches for current user
   Future<List<MatchWithDetails>> fetchJoinedMatches({
     bool forceRefresh = false,
+    bool includeExpired = false,
   }) async {
     if (!forceRefresh && _cachedJoinedMatches.isNotEmpty) {
       return _cachedJoinedMatches;
     }
 
-    final response = await _matchService.getJoinedMatches();
+    final response = await _matchService.getJoinedMatches(
+      includeExpired: includeExpired,
+    );
 
     if (response.success && response.data != null) {
       _cachedJoinedMatches = response.data!;
@@ -105,14 +113,21 @@ class MatchRepository {
   }
 
   /// Fetch match by ID
-  Future<MatchWithDetails> fetchMatchById(String id) async {
-    // Check caches first
-    final cachedMatch = _cachedMatches.where((m) => m.id == id).firstOrNull ??
-        _cachedHostedMatches.where((m) => m.id == id).firstOrNull ??
-        _cachedJoinedMatches.where((m) => m.id == id).firstOrNull;
+  /// Note: forceRefresh should be true when you need currentUserStatus
+  /// because cached matches from list endpoints don't include it
+  Future<MatchWithDetails> fetchMatchById(String id, {bool forceRefresh = false}) async {
+    // Skip cache when forceRefresh is true to get fresh currentUserStatus
+    if (!forceRefresh) {
+      // Check caches first
+      final cachedMatch = _cachedMatches.where((m) => m.id == id).firstOrNull ??
+          _cachedHostedMatches.where((m) => m.id == id).firstOrNull ??
+          _cachedJoinedMatches.where((m) => m.id == id).firstOrNull;
 
-    if (cachedMatch != null) {
-      return cachedMatch;
+      // Only use cached match if it has currentUserStatus populated
+      // or if the user is the host (doesn't need currentUserStatus)
+      if (cachedMatch != null && cachedMatch.currentUserStatus != null) {
+        return cachedMatch;
+      }
     }
 
     final response = await _matchService.getMatchById(id);
@@ -127,6 +142,22 @@ class MatchRepository {
   /// Create a new match
   Future<MatchWithDetails> createMatch(CreateMatchRequest request) async {
     final response = await _matchService.createMatch(request);
+
+    if (response.success && response.data != null) {
+      // Add to hosted matches cache
+      _cachedHostedMatches.insert(0, response.data!);
+      return response.data!;
+    }
+
+    throw Exception(response.error?.message ?? 'Failed to create match');
+  }
+
+  /// Create a new match with images (multipart upload)
+  Future<MatchWithDetails> createMatchWithImages(
+    CreateMatchRequest request,
+    List<File> images,
+  ) async {
+    final response = await _matchService.createMatchWithImages(request, images);
 
     if (response.success && response.data != null) {
       // Add to hosted matches cache
@@ -214,7 +245,7 @@ class MatchRepository {
     final response = await _matchService.respondToJoinRequest(
       matchId,
       playerId,
-      RespondToJoinRequest(action: accept ? 'accept' : 'reject'),
+      RespondToJoinRequest(status: accept ? 'ACCEPTED' : 'REJECTED'),
     );
 
     if (response.success && response.data != null) {
@@ -230,6 +261,24 @@ class MatchRepository {
 
     throw Exception(
         response.error?.message ?? 'Failed to respond to join request');
+  }
+
+  /// Fetch join requests for a match (host only)
+  Future<List<MatchPlayer>> fetchJoinRequests(
+    String matchId, {
+    MatchPlayerStatus? status,
+  }) async {
+    final response = await _matchService.getJoinRequests(
+      matchId,
+      status: status,
+    );
+
+    if (response.success && response.data != null) {
+      return response.data!;
+    }
+
+    throw Exception(
+        response.error?.message ?? 'Failed to fetch join requests');
   }
 
   /// Update match in all caches

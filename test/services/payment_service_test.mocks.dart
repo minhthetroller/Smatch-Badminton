@@ -4,6 +4,7 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i7;
+import 'dart:io' as _i8;
 
 import 'package:firebase_auth/firebase_auth.dart' as _i4;
 import 'package:firebase_auth_platform_interface/firebase_auth_platform_interface.dart'
@@ -253,6 +254,58 @@ class MockApiService extends _i1.Mock implements _i5.ApiService {
           #deleteWithAuth,
           [endpoint],
           {#authToken: authToken},
+        ),
+        returnValue:
+            _i7.Future<Map<String, dynamic>>.value(<String, dynamic>{}),
+      ) as _i7.Future<Map<String, dynamic>>);
+
+  @override
+  _i7.Future<Map<String, dynamic>> postMultipartWithAuth(
+    String? endpoint, {
+    required String? authToken,
+    Map<String, String>? fields,
+    Map<String, _i8.File>? files,
+    int? maxRetries = 3,
+    int? retryDelay = 1000,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #postMultipartWithAuth,
+          [endpoint],
+          {
+            #authToken: authToken,
+            #fields: fields,
+            #files: files,
+            #maxRetries: maxRetries,
+            #retryDelay: retryDelay,
+          },
+        ),
+        returnValue:
+            _i7.Future<Map<String, dynamic>>.value(<String, dynamic>{}),
+      ) as _i7.Future<Map<String, dynamic>>);
+
+  @override
+  _i7.Future<Map<String, dynamic>> postMultipartWithAuthMultipleFiles(
+    String? endpoint, {
+    required String? authToken,
+    Map<String, String>? fields,
+    String? filesFieldName,
+    List<_i8.File>? files,
+    int? maxRetries = 3,
+    int? retryDelay = 1000,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #postMultipartWithAuthMultipleFiles,
+          [endpoint],
+          {
+            #authToken: authToken,
+            #fields: fields,
+            #filesFieldName: filesFieldName,
+            #files: files,
+            #maxRetries: maxRetries,
+            #retryDelay: retryDelay,
+          },
         ),
         returnValue:
             _i7.Future<Map<String, dynamic>>.value(<String, dynamic>{}),

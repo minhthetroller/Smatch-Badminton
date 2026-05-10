@@ -2,6 +2,7 @@ import '../core/constants/api_constants.dart';
 import '../models/api_response.dart';
 import '../models/match.dart';
 import 'api_service.dart';
+import 'dart:io';
 
 /// Service for match-related API calls
 class MatchService {
@@ -61,11 +62,13 @@ class MatchService {
   /// Get matches hosted by current user
   Future<ApiResponse<List<MatchWithDetails>>> getHostedMatches({
     MatchStatus? status,
+    bool includeExpired = false,
   }) async {
     _requireAuth();
     
     final queryParams = <String, String>{};
     if (status != null) queryParams['status'] = status.value;
+    if (includeExpired) queryParams['includeExpired'] = 'true';
 
     final response = await _apiService.getWithAuth(
       ApiConstants.matchesHosted,
@@ -82,12 +85,18 @@ class MatchService {
   }
 
   /// Get matches joined by current user
-  Future<ApiResponse<List<MatchWithDetails>>> getJoinedMatches() async {
+  Future<ApiResponse<List<MatchWithDetails>>> getJoinedMatches({
+    bool includeExpired = false,
+  }) async {
     _requireAuth();
+    
+    final queryParams = <String, String>{};
+    if (includeExpired) queryParams['includeExpired'] = 'true';
     
     final response = await _apiService.getWithAuth(
       ApiConstants.matchesJoined,
       authToken: _authToken!,
+      queryParams: queryParams.isEmpty ? null : queryParams,
     );
 
     return ApiResponse.fromJson(
@@ -99,8 +108,20 @@ class MatchService {
   }
 
   /// Get match by ID
+  /// Uses auth token if available to get currentUserStatus
   Future<ApiResponse<MatchWithDetails>> getMatchById(String id) async {
-    final response = await _apiService.get(ApiConstants.matchById(id));
+    final Map<String, dynamic> response;
+    
+    // Use authenticated request if token is available
+    // This enables the API to return currentUserStatus for the user
+    if (_authToken != null) {
+      response = await _apiService.getWithAuth(
+        ApiConstants.matchById(id),
+        authToken: _authToken!,
+      );
+    } else {
+      response = await _apiService.get(ApiConstants.matchById(id));
+    }
 
     return ApiResponse.fromJson(
       response,
@@ -117,6 +138,61 @@ class MatchService {
       ApiConstants.matches,
       authToken: _authToken!,
       body: request.toJson(),
+    );
+
+    return ApiResponse.fromJson(
+      response,
+      (data) => MatchWithDetails.fromJson(data as Map<String, dynamic>),
+    );
+  }
+
+  /// Upload a single image file and return its public S3 URL
+  Future<String> _uploadImage(File image) async {
+    final response = await _apiService.postMultipartWithAuth(
+      ApiConstants.matchImageUpload,
+      authToken: _authToken!,
+      files: {'image': image},
+    );
+    final data = response['data'];
+    if (data is Map<String, dynamic> && data['url'] is String) {
+      return data['url'] as String;
+    }
+    throw ApiException('Image upload failed: unexpected response format');
+  }
+
+  /// Create a new match, uploading images first then posting JSON
+  Future<ApiResponse<MatchWithDetails>> createMatchWithImages(
+    CreateMatchRequest request,
+    List<File> images,
+  ) async {
+    _requireAuth();
+
+    final imageUrls = <String>[];
+    for (final image in images) {
+      final url = await _uploadImage(image);
+      imageUrls.add(url);
+    }
+
+    final requestWithImages = CreateMatchRequest(
+      courtId: request.courtId,
+      title: request.title,
+      description: request.description,
+      images: imageUrls.isNotEmpty ? imageUrls : null,
+      skillLevel: request.skillLevel,
+      shuttleType: request.shuttleType,
+      playerFormat: request.playerFormat,
+      date: request.date,
+      startTime: request.startTime,
+      endTime: request.endTime,
+      isPrivate: request.isPrivate,
+      price: request.price,
+      slotsNeeded: request.slotsNeeded,
+    );
+
+    final response = await _apiService.postWithAuth(
+      ApiConstants.matches,
+      authToken: _authToken!,
+      body: requestWithImages.toJson(),
     );
 
     return ApiResponse.fromJson(
@@ -183,6 +259,31 @@ class MatchService {
       authToken: _authToken!,
     );
     return ApiResponse.fromJson(response, null);
+  }
+
+  /// Get join requests for a match (host only)
+  /// Optional status filter: PENDING, ACCEPTED, REJECTED, PENDING_PAYMENT
+  Future<ApiResponse<List<MatchPlayer>>> getJoinRequests(
+    String matchId, {
+    MatchPlayerStatus? status,
+  }) async {
+    _requireAuth();
+    
+    final queryParams = <String, String>{};
+    if (status != null) queryParams['status'] = status.value;
+
+    final response = await _apiService.getWithAuth(
+      ApiConstants.matchJoinRequests(matchId),
+      authToken: _authToken!,
+      queryParams: queryParams.isEmpty ? null : queryParams,
+    );
+
+    return ApiResponse.fromJson(
+      response,
+      (data) => (data as List)
+          .map((item) => MatchPlayer.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
   }
 
   /// Respond to a join request (accept/reject)

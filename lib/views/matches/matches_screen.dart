@@ -114,6 +114,8 @@ class _MatchesScreenState extends State<MatchesScreen>
       return;
     }
     
+    // Capture MatchViewModel before navigation to avoid BuildContext async gap
+    final matchVM = context.read<MatchViewModel>();
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => const CreateMatchView(),
@@ -122,7 +124,7 @@ class _MatchesScreenState extends State<MatchesScreen>
       // If match was created successfully, switch to My Matches tab and refresh
       if (result != null) {
         _tabController.animateTo(1); // Switch to My Matches tab
-        context.read<MatchViewModel>().fetchHostedMatches(refresh: true);
+        matchVM.fetchHostedMatches(refresh: true);
       }
     });
   }
@@ -170,7 +172,12 @@ class _BrowseMatchesTab extends StatelessWidget {
               return false;
             },
             child: ListView.builder(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: MediaQuery.of(context).padding.bottom + 72 + 16,
+              ),
               itemCount: matchVM.browseMatches.length +
                   (matchVM.hasMoreBrowseMatches ? 1 : 0),
               itemBuilder: (context, index) {
@@ -260,7 +267,12 @@ class _MyMatchesTab extends StatelessWidget {
           },
           color: AppTheme.primaryColor,
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 16,
+              bottom: MediaQuery.of(context).padding.bottom + 72 + 16,
+            ),
             physics: const AlwaysScrollableScrollPhysics(),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

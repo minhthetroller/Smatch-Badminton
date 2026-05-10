@@ -224,17 +224,36 @@ class MatchPlayer {
   });
 
   factory MatchPlayer.fromJson(Map<String, dynamic> json) {
+    // Handle user data - support both nested 'user' object and flat fields
+    MatchPlayerUser? user;
+    if (json['user'] != null) {
+      user = MatchPlayerUser.fromJson(json['user'] as Map<String, dynamic>);
+    } else if (json['userName'] != null || json['userPhotoUrl'] != null) {
+      // Fallback to flat fields from API response
+      user = MatchPlayerUser(
+        id: json['userId'] as String? ?? '',
+        displayName: json['userName'] as String?,
+        avatarUrl: json['userPhotoUrl'] as String?,
+      );
+    }
+
+    // Handle joinedAt - support both 'joinedAt' and 'requestedAt' field names
+    DateTime joinedAt;
+    if (json['joinedAt'] != null) {
+      joinedAt = DateTime.parse(json['joinedAt'] as String);
+    } else if (json['requestedAt'] != null) {
+      joinedAt = DateTime.parse(json['requestedAt'] as String);
+    } else {
+      joinedAt = DateTime.now();
+    }
+
     return MatchPlayer(
       id: json['id'] as String? ?? '',
       matchId: json['matchId'] as String? ?? '',
       userId: json['userId'] as String? ?? '',
       status: MatchPlayerStatus.fromString(json['status'] as String? ?? 'PENDING'),
-      joinedAt: json['joinedAt'] != null
-          ? DateTime.parse(json['joinedAt'] as String)
-          : DateTime.now(),
-      user: json['user'] != null
-          ? MatchPlayerUser.fromJson(json['user'] as Map<String, dynamic>)
-          : null,
+      joinedAt: joinedAt,
+      user: user,
     );
   }
 
@@ -246,6 +265,47 @@ class MatchPlayer {
       'status': status.value,
       'joinedAt': joinedAt.toIso8601String(),
       'user': user?.toJson(),
+    };
+  }
+}
+
+/// Current user's status in a match (returned when authenticated)
+class CurrentUserStatus {
+  final String id;  // MatchPlayer record ID - use this for API calls
+  final MatchPlayerStatus status;
+  final int? position;
+  final DateTime requestedAt;
+  final DateTime? respondedAt;
+
+  const CurrentUserStatus({
+    required this.id,
+    required this.status,
+    this.position,
+    required this.requestedAt,
+    this.respondedAt,
+  });
+
+  factory CurrentUserStatus.fromJson(Map<String, dynamic> json) {
+    return CurrentUserStatus(
+      id: json['id'] as String? ?? '',
+      status: MatchPlayerStatus.fromString(json['status'] as String? ?? 'PENDING'),
+      position: json['position'] as int?,
+      requestedAt: json['requestedAt'] != null
+          ? DateTime.parse(json['requestedAt'] as String)
+          : DateTime.now(),
+      respondedAt: json['respondedAt'] != null
+          ? DateTime.parse(json['respondedAt'] as String)
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'status': status.value,
+      'position': position,
+      'requestedAt': requestedAt.toIso8601String(),
+      'respondedAt': respondedAt?.toIso8601String(),
     };
   }
 }
@@ -352,6 +412,7 @@ class MatchWithDetails extends Match {
   final MatchHost? host;
   final List<MatchPlayer> players;
   final int acceptedPlayersCount;
+  final CurrentUserStatus? currentUserStatus;
 
   const MatchWithDetails({
     required super.id,
@@ -376,9 +437,65 @@ class MatchWithDetails extends Match {
     this.host,
     this.players = const [],
     this.acceptedPlayersCount = 0,
+    this.currentUserStatus,
   });
 
   factory MatchWithDetails.fromJson(Map<String, dynamic> json) {
+    // Handle court data - support both nested 'court' object and flat fields
+    MatchCourt? court;
+    if (json['court'] != null) {
+      court = MatchCourt.fromJson(json['court'] as Map<String, dynamic>);
+    } else if (json['courtName'] != null || json['courtAddress'] != null) {
+      // Fallback to flat fields from API response
+      court = MatchCourt(
+        id: json['courtId'] as String? ?? '',
+        name: json['courtName'] as String? ?? '',
+        addressFull: json['courtAddress'] as String?,
+      );
+    }
+
+    // Handle host data - support both nested 'host' object and flat fields
+    MatchHost? host;
+    if (json['host'] != null) {
+      host = MatchHost.fromJson(json['host'] as Map<String, dynamic>);
+    } else if (json['hostName'] != null || json['hostUserId'] != null) {
+      // Fallback to flat fields from API response
+      host = MatchHost(
+        id: json['hostUserId'] as String? ?? '',
+        displayName: json['hostName'] as String?,
+      );
+    }
+
+    // Handle players - also parse flat player format from API
+    final playersList = <MatchPlayer>[];
+    final playersJson = json['players'] as List<dynamic>?;
+    if (playersJson != null) {
+      for (final p in playersJson) {
+        if (p is Map<String, dynamic>) {
+          playersList.add(MatchPlayer.fromJson(p));
+        }
+      }
+    }
+
+    // Handle acceptedPlayersCount - support both nested and flat 'slotsAccepted'
+    final acceptedCount = json['acceptedPlayersCount'] as int? ?? 
+                          json['slotsAccepted'] as int? ?? 
+                          0;
+
+    // Parse currentUserStatus if present (only returned for authenticated users)
+    CurrentUserStatus? currentUserStatus;
+    if (json['currentUserStatus'] != null) {
+      currentUserStatus = CurrentUserStatus.fromJson(
+        json['currentUserStatus'] as Map<String, dynamic>,
+      );
+      // Debug: print parsed status
+      // ignore: avoid_print
+      print('Parsed currentUserStatus: id=${currentUserStatus.id}, status=${currentUserStatus.status.value}');
+    } else {
+      // ignore: avoid_print
+      print('currentUserStatus is null in API response');
+    }
+
     return MatchWithDetails(
       id: json['id'] as String? ?? '',
       courtId: json['courtId'] as String? ?? '',
@@ -405,17 +522,11 @@ class MatchWithDetails extends Match {
       updatedAt: json['updatedAt'] != null
           ? DateTime.parse(json['updatedAt'] as String)
           : DateTime.now(),
-      court: json['court'] != null
-          ? MatchCourt.fromJson(json['court'] as Map<String, dynamic>)
-          : null,
-      host: json['host'] != null
-          ? MatchHost.fromJson(json['host'] as Map<String, dynamic>)
-          : null,
-      players: (json['players'] as List<dynamic>?)
-              ?.map((e) => MatchPlayer.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [],
-      acceptedPlayersCount: json['acceptedPlayersCount'] as int? ?? 0,
+      court: court,
+      host: host,
+      players: playersList,
+      acceptedPlayersCount: acceptedCount,
+      currentUserStatus: currentUserStatus,
     );
   }
 
@@ -428,8 +539,14 @@ class MatchWithDetails extends Match {
       'host': host?.toJson(),
       'players': players.map((e) => e.toJson()).toList(),
       'acceptedPlayersCount': acceptedPlayersCount,
+      'currentUserStatus': currentUserStatus?.toJson(),
     };
   }
+
+  /// Get total current players count (NOT including host)
+  /// acceptedPlayersCount is the number of accepted players (not including host)
+  /// slotsNeeded does NOT include the host, so totalPlayersCount = acceptedPlayersCount
+  int get totalPlayersCount => acceptedPlayersCount;
 
   /// Get remaining slots
   int get remainingSlots => slotsNeeded - acceptedPlayersCount;
@@ -560,13 +677,13 @@ class JoinMatchRequest {
 
 /// Request model for responding to a join request
 class RespondToJoinRequest {
-  final String action; // 'accept' or 'reject'
+  final String status; // 'ACCEPTED' or 'REJECTED'
 
-  const RespondToJoinRequest({required this.action});
+  const RespondToJoinRequest({required this.status});
 
   Map<String, dynamic> toJson() {
     return {
-      'action': action,
+      'status': status,
     };
   }
 }

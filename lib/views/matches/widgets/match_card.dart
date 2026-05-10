@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/image_url_helper.dart';
 import '../../../models/match.dart';
 
 /// Card widget for displaying match information
@@ -32,11 +34,45 @@ class MatchCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Match image (if available)
+            if (match.images.isNotEmpty)
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                child: CachedNetworkImage(
+                  imageUrl: ImageUrlHelper.transformImageUrl(match.images[0]),
+                  httpHeaders: ImageUrlHelper.imageHeaders,
+                  height: 180,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    height: 180,
+                    color: Colors.grey.shade200,
+                    child: const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    height: 180,
+                    color: Colors.grey.shade200,
+                    child: const Center(
+                      child: Icon(
+                        Icons.image_not_supported_outlined,
+                        size: 48,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
               // Header row: Title + Status badge
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,6 +109,39 @@ class MatchCard extends StatelessWidget {
                                 fontWeight: FontWeight.w600,
                                 color: AppTheme.primaryColor,
                               ),
+                            ),
+                          ),
+                        ],
+                        // Private match indicator
+                        if (match.isPrivate) ...[
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.purple.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.lock_outline,
+                                  size: 10,
+                                  color: Colors.purple,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Private',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.purple,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -122,7 +191,7 @@ class MatchCard extends StatelessWidget {
                   ),
                   _Tag(
                     icon: Icons.person_add_outlined,
-                    label: '${match.acceptedPlayersCount}/${match.slotsNeeded}',
+                    label: '${match.totalPlayersCount}/${match.slotsNeeded}',
                     color: match.isFull ? Colors.orange : Colors.green,
                   ),
                 ],
@@ -153,7 +222,10 @@ class MatchCard extends StatelessWidget {
                           radius: 12,
                           backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.1),
                           backgroundImage: match.host!.avatarUrl != null
-                              ? NetworkImage(match.host!.avatarUrl!)
+                              ? NetworkImage(
+                                  ImageUrlHelper.transformImageUrl(match.host!.avatarUrl!),
+                                  headers: ImageUrlHelper.imageHeaders,
+                                )
                               : null,
                           child: match.host!.avatarUrl == null
                               ? Text(
@@ -215,6 +287,8 @@ class MatchCard extends StatelessWidget {
             ],
           ),
         ),
+        ],
+      ),
       ),
     );
   }

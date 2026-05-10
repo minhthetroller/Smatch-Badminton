@@ -22,6 +22,14 @@ dependencies:
   
   # Networking
   http: ^1.2.2
+  http_parser: ^4.0.2
+  
+  # Images
+  image_picker: ^1.0.7
+  flutter_image_compress: ^2.1.0
+  cached_network_image: ^3.3.1
+  path_provider: ^2.1.2
+  path: ^1.9.0
   
   # Location
   geolocator: ^13.0.2

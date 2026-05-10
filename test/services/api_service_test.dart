@@ -299,28 +299,29 @@ void main() {
 
     group('DELETE request', () {
       test('should make DELETE request to correct URL', () async {
-        when(mockClient.delete(
-          any,
-          headers: anyNamed('headers'),
-        )).thenAnswer((_) async => http.Response(
-              jsonEncode({'success': true, 'data': {'message': 'Deleted'}}),
-              200,
-            ));
+        when(mockClient.send(any)).thenAnswer((_) async {
+          return http.StreamedResponse(
+            Stream.value(utf8.encode(jsonEncode({'success': true, 'data': {'message': 'Deleted'}}))),
+            200,
+          );
+        });
 
         await apiService.delete('/courts/123');
 
-        verify(mockClient.delete(
-          Uri.parse('https://api.test.com/courts/123'),
-          headers: anyNamed('headers'),
-        )).called(1);
+        final captured = verify(mockClient.send(captureAny)).captured;
+        final request = captured.first as http.Request;
+        expect(request.method, 'DELETE');
+        expect(request.url.toString(), 'https://api.test.com/courts/123');
       });
 
       test('should parse successful DELETE response', () async {
         final responseBody = {'success': true, 'data': {'message': 'Court deleted successfully'}};
-        when(mockClient.delete(
-          any,
-          headers: anyNamed('headers'),
-        )).thenAnswer((_) async => http.Response(jsonEncode(responseBody), 200));
+        when(mockClient.send(any)).thenAnswer((_) async {
+          return http.StreamedResponse(
+            Stream.value(utf8.encode(jsonEncode(responseBody))),
+            200,
+          );
+        });
 
         final result = await apiService.delete('/courts/123');
 
@@ -329,16 +330,15 @@ void main() {
       });
 
       test('should throw ApiException on 400 bad request', () async {
-        when(mockClient.delete(
-          any,
-          headers: anyNamed('headers'),
-        )).thenAnswer((_) async => http.Response(
-              jsonEncode({
-                'success': false,
-                'error': {'message': 'Booking already cancelled'}
-              }),
-              400,
-            ));
+        when(mockClient.send(any)).thenAnswer((_) async {
+          return http.StreamedResponse(
+            Stream.value(utf8.encode(jsonEncode({
+              'success': false,
+              'error': {'message': 'Booking already cancelled'}
+            }))),
+            400,
+          );
+        });
 
         expect(
           () => apiService.delete('/bookings/123'),
@@ -364,13 +364,12 @@ void main() {
       });
 
       test('should handle 204 No Content as success', () async {
-        when(mockClient.delete(
-          any,
-          headers: anyNamed('headers'),
-        )).thenAnswer((_) async => http.Response(
-              jsonEncode({'success': true}),
-              204,
-            ));
+        when(mockClient.send(any)).thenAnswer((_) async {
+          return http.StreamedResponse(
+            Stream.value(utf8.encode(jsonEncode({'success': true}))),
+            204,
+          );
+        });
 
         final result = await apiService.delete('/test');
         expect(result['success'], true);

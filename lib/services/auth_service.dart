@@ -2,6 +2,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
+import 'dart:io';
+import '../core/constants/api_constants.dart';
+import '../models/api_response.dart';
+import '../models/user.dart';
+import 'api_service.dart';
 
 /// Exception thrown when authentication fails
 class AuthException implements Exception {
@@ -62,14 +67,17 @@ class AuthService {
   final FirebaseAuth _firebaseAuth;
   final GoogleSignIn _googleSignIn;
   final FacebookAuth _facebookAuth;
+  final ApiService _apiService;
 
   AuthService({
     FirebaseAuth? firebaseAuth,
     GoogleSignIn? googleSignIn,
     FacebookAuth? facebookAuth,
+    ApiService? apiService,
   })  : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
         _googleSignIn = googleSignIn ?? GoogleSignIn(),
-        _facebookAuth = facebookAuth ?? FacebookAuth.instance;
+        _facebookAuth = facebookAuth ?? FacebookAuth.instance,
+        _apiService = apiService ?? ApiService();
 
   /// Get current Firebase user
   User? get currentUser => _firebaseAuth.currentUser;
@@ -407,6 +415,27 @@ class AuthService {
     } catch (e) {
       throw AuthException('Failed to re-authenticate: $e');
     }
+  }
+
+  /// Upload profile photo (multipart upload)
+  /// Returns updated user profile with new photo URL
+  Future<ApiResponse<UserProfile>> uploadProfilePhoto(File imageFile) async {
+    final authToken = await getIdToken(forceRefresh: true);
+    
+    if (authToken == null) {
+      throw AuthException('Not authenticated', code: 'not-authenticated');
+    }
+
+    final response = await _apiService.postMultipartWithAuth(
+      ApiConstants.authMePhoto,
+      authToken: authToken,
+      files: {'image': imageFile},
+    );
+
+    return ApiResponse.fromJson(
+      response,
+      (data) => UserProfile.fromJson(data['user'] as Map<String, dynamic>),
+    );
   }
 }
 

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/image_url_helper.dart';
 import '../../models/user.dart';
 import '../../view_models/auth_view_model.dart';
 import '../matches/match_history_view.dart';
@@ -88,23 +91,52 @@ class ProfileView extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Avatar
-          CircleAvatar(
-            radius: 50,
-            backgroundColor: const Color(0xFF2E7D32).withValues(alpha: 0.1),
-            backgroundImage: user?.photoUrl != null
-                ? NetworkImage(user!.photoUrl!)
-                : null,
-            child: user?.photoUrl == null
-                ? Text(
-                    user?.initials ?? 'A',
-                    style: const TextStyle(
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF2E7D32),
+          // Avatar with upload button
+          Stack(
+            children: [
+              CircleAvatar(
+                radius: 50,
+                backgroundColor: const Color(0xFF2E7D32).withValues(alpha: 0.1),
+                backgroundImage: user?.photoUrl != null
+                    ? NetworkImage(
+                        ImageUrlHelper.transformImageUrl(user!.photoUrl!),
+                        headers: ImageUrlHelper.imageHeaders,
+                      )
+                    : null,
+                child: user?.photoUrl == null
+                    ? Text(
+                        user?.initials ?? 'A',
+                        style: const TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2E7D32),
+                        ),
+                      )
+                    : null,
+              ),
+              // Upload button (only for registered users)
+              if (!isAnonymous)
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: GestureDetector(
+                    onTap: () => _showPhotoUploadDialog(context),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: const Icon(
+                        Icons.camera_alt,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                     ),
-                  )
-                : null,
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 16),
 
@@ -431,6 +463,179 @@ class ProfileView extends StatelessWidget {
       indent: 76,
       color: Colors.grey.shade200,
     );
+  }
+
+  void _showPhotoUploadDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  'Update Profile Photo',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              ListTile(
+                leading: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.camera_alt,
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
+                title: const Text('Take Photo'),
+                subtitle: const Text('Use camera'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _uploadPhoto(context, ImageSource.camera);
+                },
+              ),
+              
+              ListTile(
+                leading: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.photo_library,
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
+                title: const Text('Choose from Gallery'),
+                subtitle: const Text('Select existing photo'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _uploadPhoto(context, ImageSource.gallery);
+                },
+              ),
+              
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _uploadPhoto(BuildContext context, ImageSource source) async {
+    final imagePicker = ImagePicker();
+    // Get view model before any async operations
+    final authViewModel = context.read<AuthViewModel>();
+    
+    try {
+      final XFile? image = await imagePicker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+      
+      if (image == null) return;
+      
+      final file = File(image.path);
+      final fileSize = await file.length();
+      if (fileSize > 5 * 1024 * 1024) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Image size must be less than 5MB'),
+              backgroundColor: AppTheme.errorColor,
+            ),
+          );
+        }
+        return;
+      }
+      
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Uploading photo...'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+      
+      final success = await authViewModel.uploadProfilePhoto(file);
+      
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile photo updated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to upload photo. Please try again.'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildAccountActions(BuildContext context, AuthViewModel authViewModel) {

@@ -8,6 +8,7 @@ import '../../models/match.dart';
 import '../../services/match_service.dart';
 import '../../view_models/auth_view_model.dart';
 import '../../view_models/match_view_model.dart';
+import 'match_success_screen.dart';
 
 /// Payment state for the match payment flow
 enum PaymentState {
@@ -39,6 +40,44 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
   Timer? _statusPollingTimer;
   Timer? _expirationTimer;
   Duration? _timeRemaining;
+  bool _accessDenied = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _validateAccess();
+  }
+
+  /// Validate that user can access payment for this match
+  /// For private matches, user must have PENDING_PAYMENT or ACCEPTED status (host approved)
+  void _validateAccess() {
+    if (!widget.match.isPrivate) return; // Public matches don't need validation
+    
+    final authVM = context.read<AuthViewModel>();
+    final userId = authVM.user?.id;
+    if (userId == null) {
+      _accessDenied = true;
+      return;
+    }
+    
+    // Check player status in match
+    final playerInMatch = widget.match.players.where(
+      (p) => p.userId == userId
+    ).firstOrNull;
+    
+    if (playerInMatch == null) {
+      // User hasn't requested to join yet - shouldn't be on payment screen
+      _accessDenied = true;
+      return;
+    }
+    
+    // For private matches, only PENDING_PAYMENT or ACCEPTED status can proceed to payment
+    final status = playerInMatch.status;
+    if (status != MatchPlayerStatus.pendingPayment && 
+        status != MatchPlayerStatus.accepted) {
+      _accessDenied = true;
+    }
+  }
 
   String _formatPrice(int price) {
     if (price == 0) return 'Miễn phí';
@@ -64,6 +103,92 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
 
   @override
   Widget build(BuildContext context) {
+    // Show access denied for private matches without host approval
+    if (_accessDenied) {
+      return Scaffold(
+        backgroundColor: AppTheme.backgroundColor,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: AppTheme.textPrimary),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          title: const Text(
+            'Access Denied',
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.lock_outline,
+                    color: Colors.orange,
+                    size: 60,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                const Text(
+                  'Waiting for Approval',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'This is a private match. You need host approval before you can proceed to payment.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 48),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Go Back',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: _paymentState == PaymentState.success
@@ -121,10 +246,27 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
       case PaymentState.verifyingPayment:
         return _buildLoadingView('Đang xác nhận thanh toán...');
       case PaymentState.success:
-        return _buildSuccessScreen();
+        // Navigate to success screen
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _navigateToSuccessScreen();
+        });
+        return _buildLoadingView('Đang chuyển trang...');
       case PaymentState.failed:
         return _buildFailedView();
     }
+  }
+  
+  void _navigateToSuccessScreen() {
+    if (!mounted) return;
+    // Use pushReplacement to prevent going back to payment view
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (context) => MatchSuccessScreen(
+          match: widget.match,
+          amountPaid: widget.match.price > 0 ? widget.match.price.toDouble() : null,
+        ),
+      ),
+    );
   }
 
   Widget _buildInitialView() {
@@ -884,11 +1026,12 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
   Future<void> _joinFreeMatch() async {
     setState(() => _paymentState = PaymentState.creatingPayment);
 
-    try {
-      final authVM = context.read<AuthViewModel>();
-      await authVM.refreshAuthToken();
+    // Capture ViewModels before async operations to avoid BuildContext async gap
+    final authVM = context.read<AuthViewModel>();
+    final matchVM = context.read<MatchViewModel>();
 
-      final matchVM = context.read<MatchViewModel>();
+    try {
+      await authVM.refreshAuthToken();
       await matchVM.joinMatch(widget.match.id);
 
       if (mounted) {
@@ -993,89 +1136,5 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
       _errorMessage = null;
       _timeRemaining = null;
     });
-  }
-
-  Widget _buildSuccessScreen() {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_circle,
-                    color: Colors.green,
-                    size: 60,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                const Text(
-                  'Thanh toán thành công!',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Bạn đã tham gia trận đấu\n"${widget.match.title}"',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${_formatDate(widget.match.date)}\n${widget.match.startTime} - ${widget.match.endTime}',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 48),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      // Pop back to match detail and refresh
-                      Navigator.of(context).pop(true);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryColor,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: const Text(
-                      'Quay lại chi tiết trận',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

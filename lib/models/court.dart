@@ -53,6 +53,23 @@ class Court {
   }
 
   factory Court.fromJson(Map<String, dynamic> json) {
+    CourtLocation? parsedLocation;
+
+    final locationJson = json['location'];
+    if (locationJson is Map<String, dynamic>) {
+      parsedLocation = CourtLocation.fromJson(locationJson);
+    } else {
+      // Backend may return top-level lat/lng instead of nested location.
+      final lat = (json['lat'] ?? json['latitude']) as num?;
+      final lng = (json['lng'] ?? json['longitude']) as num?;
+      if (lat != null && lng != null) {
+        parsedLocation = CourtLocation(
+          latitude: lat.toDouble(),
+          longitude: lng.toDouble(),
+        );
+      }
+    }
+
     return Court(
       id: json['id'] as String,
       name: json['name'] as String,
@@ -72,9 +89,7 @@ class Court {
       openingHours: json['openingHours'] != null
           ? OpeningHours.fromJson(json['openingHours'] as Map<String, dynamic>)
           : null,
-      location: json['location'] != null
-          ? CourtLocation.fromJson(json['location'] as Map<String, dynamic>)
-          : null,
+      location: parsedLocation,
       distance: (json['distance'] as num?)?.toDouble(),
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
@@ -269,10 +284,15 @@ class CourtLocation {
   const CourtLocation({required this.latitude, required this.longitude});
 
   factory CourtLocation.fromJson(Map<String, dynamic> json) {
-    return CourtLocation(
-      latitude: (json['latitude'] as num).toDouble(),
-      longitude: (json['longitude'] as num).toDouble(),
-    );
+    final lat = (json['latitude'] ?? json['lat']) as num?;
+    final lng = (json['longitude'] ?? json['lng']) as num?;
+    if (lat == null || lng == null) {
+      throw const FormatException(
+        'CourtLocation requires latitude/longitude or lat/lng',
+      );
+    }
+
+    return CourtLocation(latitude: lat.toDouble(), longitude: lng.toDouble());
   }
 
   Map<String, dynamic> toJson() {

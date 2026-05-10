@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
@@ -7,6 +8,7 @@ import '../repositories/auth_repository.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
+import '../core/utils/image_utils.dart';
 
 /// Authentication state
 enum AuthState {
@@ -17,16 +19,24 @@ enum AuthState {
   error,
 }
 
+/// Callback type for logout event
+typedef LogoutCallback = void Function();
+
 /// ViewModel for managing authentication state
 class AuthViewModel extends ChangeNotifier {
   final AuthService _authService;
   final AuthRepository _authRepository;
   final NotificationService _notificationService;
+  
+  /// Callback to be invoked when user logs out
+  /// Used to clear cached data in other ViewModels
+  LogoutCallback? onLogout;
 
   AuthViewModel({
     AuthService? authService,
     AuthRepository? authRepository,
     NotificationService? notificationService,
+    this.onLogout,
   })  : _authService = authService ?? AuthService(),
         _authRepository = authRepository ?? AuthRepository(),
         _notificationService = notificationService ?? NotificationService();
@@ -632,6 +642,46 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
+  /// Upload profile photo (with compression and retry)
+  Future<bool> uploadProfilePhoto(File imageFile) async {
+    if (!isAuthenticated || isAnonymous) return false;
+
+    _state = AuthState.loading;
+    notifyListeners();
+
+    try {
+      // Compress image before upload
+      final compressedImage = await ImageUtils.compressImage(
+        imageFile,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        quality: 85,
+      );
+
+      if (compressedImage == null) {
+        throw Exception('Failed to compress image');
+      }
+
+      // Upload to backend
+      final response = await _authService.uploadProfilePhoto(compressedImage);
+      
+      if (response.success && response.data != null) {
+        _user = response.data;
+        _state = AuthState.authenticated;
+        notifyListeners();
+        return true;
+      }
+
+      throw Exception(response.error?.message ?? 'Upload failed');
+    } catch (e) {
+      debugPrint('Upload profile photo failed: $e');
+      _state = AuthState.authenticated;
+      _errorMessage = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Get booking history
   /// Returns empty response if user has no bookings
   /// Returns null only on actual errors
@@ -716,6 +766,10 @@ class AuthViewModel extends ChangeNotifier {
     try {
       // Unregister FCM token before signing out
       await _unregisterFcmToken();
+      
+      // Invoke logout callback to clear cached data in other ViewModels
+      // This ensures user-specific data like hosted matches, joined matches, etc. are cleared
+      onLogout?.call();
       
       await _authService.signOut();
       

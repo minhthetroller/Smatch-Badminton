@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/image_url_helper.dart';
 import '../../models/match.dart';
 import '../../view_models/auth_view_model.dart';
 import '../../view_models/match_view_model.dart';
 import 'match_payment_view.dart';
+import 'manage_match_view.dart';
 
 /// Full-screen match detail view with join button at bottom
 class MatchDetailView extends StatefulWidget {
@@ -23,7 +26,8 @@ class _MatchDetailViewState extends State<MatchDetailView> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<MatchViewModel>().fetchMatchById(widget.matchId);
+      // Always refresh to get currentUserStatus for authenticated users
+      context.read<MatchViewModel>().fetchMatchById(widget.matchId, refresh: true);
     });
   }
 
@@ -52,7 +56,7 @@ class _MatchDetailViewState extends State<MatchDetailView> {
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: () => matchVM.fetchMatchById(widget.matchId),
+                    onPressed: () => matchVM.fetchMatchById(widget.matchId, refresh: true),
                     child: const Text('Retry'),
                   ),
                 ],
@@ -65,20 +69,67 @@ class _MatchDetailViewState extends State<MatchDetailView> {
             return const Center(child: Text('Match not found'));
           }
 
-          return CustomScrollView(
-            slivers: [
-              _buildAppBar(context, match),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildMatchInfo(match),
-                      const SizedBox(height: 24),
-                      _buildPlayersSection(match),
-                      const SizedBox(height: 80), // Space for bottom button
-                    ],
+          return Stack(
+            children: [
+              SafeArea(
+                child: RefreshIndicator(
+                  onRefresh: () => matchVM.fetchMatchById(widget.matchId, refresh: true),
+                  color: AppTheme.primaryColor,
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Full-width image carousel at the top
+                          _buildImageCarousel(match.images),
+                        
+                          // Match title below images
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(
+                              match.title,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildMatchInfo(match),
+                            const SizedBox(height: 24),
+                            _buildPlayersSection(match),
+                            const SizedBox(height: 80), // Space for bottom button
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  ),
+                ),
+              ),
+              // Back button overlay
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 8,
+                left: 8,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => Navigator.of(context).pop(),
                   ),
                 ),
               ),
@@ -97,34 +148,6 @@ class _MatchDetailViewState extends State<MatchDetailView> {
     );
   }
 
-  Widget _buildAppBar(BuildContext context, MatchWithDetails match) {
-    return SliverAppBar(
-      expandedHeight: 200,
-      pinned: true,
-      backgroundColor: AppTheme.primaryColor,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: Colors.white),
-        onPressed: () => Navigator.of(context).pop(),
-      ),
-      flexibleSpace: FlexibleSpaceBar(
-        title: Text(
-          match.title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        background: match.images.isNotEmpty
-            ? Image.network(
-                match.images.first,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _buildDefaultBackground(),
-              )
-            : _buildDefaultBackground(),
-      ),
-    );
-  }
-
   Widget _buildDefaultBackground() {
     return Container(
       decoration: BoxDecoration(
@@ -139,6 +162,43 @@ class _MatchDetailViewState extends State<MatchDetailView> {
       ),
       child: const Center(
         child: Icon(Icons.sports_tennis, size: 80, color: Colors.white38),
+      ),
+    );
+  }
+
+  Widget _buildImageCarousel(List<String> images) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    
+    // Show images if available, otherwise show default background
+    if (images.isEmpty) {
+      return SizedBox(
+        width: screenWidth,
+        height: screenWidth,
+        child: _buildDefaultBackground(),
+      );
+    }
+
+    return SizedBox(
+      width: screenWidth,
+      height: screenWidth,
+      child: PageView.builder(
+        itemCount: images.length,
+        itemBuilder: (context, index) {
+          return CachedNetworkImage(
+            imageUrl: ImageUrlHelper.transformImageUrl(images[index]),
+            httpHeaders: ImageUrlHelper.imageHeaders,
+            fit: BoxFit.cover,
+            width: screenWidth,
+            height: screenWidth,
+            placeholder: (context, url) => Container(
+              color: Colors.grey.shade200,
+              child: const Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+            errorWidget: (context, url, error) => _buildDefaultBackground(),
+          );
+        },
       ),
     );
   }
@@ -226,7 +286,7 @@ class _MatchDetailViewState extends State<MatchDetailView> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Players (${match.acceptedPlayersCount}/${match.slotsNeeded})',
+              'Players (${match.totalPlayersCount}/${match.slotsNeeded})',
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -295,7 +355,10 @@ class _MatchDetailViewState extends State<MatchDetailView> {
         tileColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         leading: CircleAvatar(
-          backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+          backgroundImage: avatarUrl != null ? NetworkImage(
+            ImageUrlHelper.transformImageUrl(avatarUrl),
+            headers: ImageUrlHelper.imageHeaders,
+          ) : null,
           backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.1),
           child: avatarUrl == null
               ? Text(
@@ -349,7 +412,10 @@ class _MatchDetailViewState extends State<MatchDetailView> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         leading: CircleAvatar(
           backgroundImage: player.user?.avatarUrl != null
-              ? NetworkImage(player.user!.avatarUrl!)
+              ? NetworkImage(
+                  ImageUrlHelper.transformImageUrl(player.user!.avatarUrl!),
+                  headers: ImageUrlHelper.imageHeaders,
+                )
               : null,
           backgroundColor: Colors.orange.withValues(alpha: 0.1),
           child: player.user?.avatarUrl == null
@@ -405,37 +471,87 @@ class _MatchDetailViewState extends State<MatchDetailView> {
     if (userId == null) return const SizedBox.shrink();
 
     final isHost = match.hostUserId == userId;
-    final hasJoined = matchVM.hasJoinedMatch(match.id, userId);
-    final joinStatus = matchVM.getUserJoinStatus(match.id, userId);
+    
+    // Use currentUserStatus from API response (available when authenticated)
+    // This is more reliable than searching through players list
+    final currentUserStatus = match.currentUserStatus;
+    final hasJoined = currentUserStatus != null;
+    final joinStatus = currentUserStatus?.status;
+    
+    // Debug: print current status for troubleshooting
+    debugPrint('Match ${match.id} - currentUserStatus: ${currentUserStatus?.status.value}, hasJoined: $hasJoined, isHost: $isHost');
+    
+    // Check if user was rejected (blocked from retrying)
+    final wasRejected = joinStatus == MatchPlayerStatus.rejected;
 
     Widget button;
 
     if (isHost) {
+      // Show pending count badge if there are pending requests
+      final pendingCount = match.pendingPlayers.length;
       button = _ActionButton(
-        label: 'Manage Match',
-        icon: Icons.settings,
-        onPressed: () {
-          // TODO: Navigate to manage match
-        },
+        label: pendingCount > 0 ? 'Manage Match ($pendingCount pending)' : 'Manage Match',
+        icon: pendingCount > 0 ? Icons.notification_important : Icons.settings,
+        backgroundColor: pendingCount > 0 ? Colors.orange : AppTheme.primaryColor,
+        onPressed: () => _navigateToManageMatch(context, match.id),
+      );
+    } else if (wasRejected) {
+      // User was rejected - show disabled state, no retry allowed
+      button = _ActionButton(
+        label: 'Request Rejected',
+        icon: Icons.block,
+        backgroundColor: Colors.red.shade300,
+        onPressed: null,
       );
     } else if (hasJoined) {
-      if (joinStatus == MatchPlayerStatus.pending) {
-        button = _ActionButton(
-          label: 'Request Pending',
-          icon: Icons.pending,
-          backgroundColor: Colors.orange,
-          onPressed: null,
-        );
-      } else if (joinStatus == MatchPlayerStatus.accepted) {
-        button = _ActionButton(
-          label: 'Leave Match',
-          icon: Icons.exit_to_app,
-          backgroundColor: Colors.red,
-          isLoading: matchVM.isLeaving,
-          onPressed: () => _leaveMatch(context, match.id),
-        );
-      } else {
-        return const SizedBox.shrink();
+      // Switch statement ensures we handle all status cases explicitly
+      switch (joinStatus) {
+        case MatchPlayerStatus.pending:
+          // Private match: waiting for host approval
+          button = _ActionButton(
+            label: 'Request Pending',
+            icon: Icons.pending,
+            backgroundColor: Colors.orange,
+            onPressed: null,
+          );
+          break;
+        case MatchPlayerStatus.pendingPayment:
+          // Private match: host approved, now need to pay
+          final priceText = match.price > 0 
+              ? _formatPrice(match.price)
+              : 'Free';
+          button = _ActionButton(
+            label: 'Pay Now • $priceText',
+            icon: Icons.payment,
+            backgroundColor: AppTheme.primaryColor,
+            isLoading: matchVM.isJoining,
+            onPressed: () => _navigateToPayment(context, match),
+          );
+          break;
+        case MatchPlayerStatus.accepted:
+          button = _ActionButton(
+            label: 'Leave Match',
+            icon: Icons.exit_to_app,
+            backgroundColor: Colors.red,
+            isLoading: matchVM.isLeaving,
+            onPressed: () => _leaveMatch(context, match.id),
+          );
+          break;
+        case MatchPlayerStatus.expired:
+          // Payment expired - allow retry
+          button = _ActionButton(
+            label: 'Payment Expired • Retry',
+            icon: Icons.refresh,
+            backgroundColor: Colors.orange,
+            isLoading: matchVM.isJoining,
+            onPressed: () => _navigateToPayment(context, match),
+          );
+          break;
+        case MatchPlayerStatus.rejected:
+        case MatchPlayerStatus.left:
+        case null:
+          // Should not happen if hasJoined is true, but handle gracefully
+          return const SizedBox.shrink();
       }
     } else if (match.isFull) {
       button = _ActionButton(
@@ -452,18 +568,31 @@ class _MatchDetailViewState extends State<MatchDetailView> {
         onPressed: null,
       );
     } else {
-      // Show join button with price
-      final priceText = match.price > 0 
-          ? '${_formatPrice(match.price)}'
-          : 'Free';
-      button = _ActionButton(
-        label: 'Join Match • $priceText',
-        icon: Icons.check_circle,
-        isLoading: matchVM.isJoining,
-        onPressed: authVM.isAnonymous
-            ? () => _showSignInRequired(context)
-            : () => _navigateToPayment(context, match),
-      );
+      // Determine join flow based on match type (public vs private)
+      if (match.isPrivate) {
+        // Private match: Request to join first, then host approves, then pay
+        button = _ActionButton(
+          label: 'Request to Join',
+          icon: Icons.lock_outline,
+          isLoading: matchVM.isJoining,
+          onPressed: authVM.isAnonymous
+              ? () => _showSignInRequired(context)
+              : () => _requestToJoin(context, match),
+        );
+      } else {
+        // Public match: Direct join (with payment if price > 0)
+        final priceText = match.price > 0 
+            ? _formatPrice(match.price)
+            : 'Free';
+        button = _ActionButton(
+          label: 'Join Match • $priceText',
+          icon: Icons.check_circle,
+          isLoading: matchVM.isJoining,
+          onPressed: authVM.isAnonymous
+              ? () => _showSignInRequired(context)
+              : () => _navigateToPayment(context, match),
+        );
+      }
     }
 
     return Container(
@@ -487,28 +616,18 @@ class _MatchDetailViewState extends State<MatchDetailView> {
     );
   }
 
-  Future<void> _joinMatch(BuildContext context, String matchId) async {
-    final matchVM = context.read<MatchViewModel>();
-    try {
-      await matchVM.joinMatch(matchId);
+  /// Navigate to manage match screen for hosts
+  void _navigateToManageMatch(BuildContext context, String matchId) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ManageMatchView(matchId: matchId),
+      ),
+    ).then((_) {
+      // Refresh match details when returning
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Successfully joined the match!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        context.read<MatchViewModel>().fetchMatchById(widget.matchId, refresh: true);
       }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to join: $e'),
-            backgroundColor: AppTheme.errorColor,
-          ),
-        );
-      }
-    }
+    });
   }
 
   /// Navigate to payment screen for joining the match
@@ -519,18 +638,48 @@ class _MatchDetailViewState extends State<MatchDetailView> {
       ),
     ).then((result) {
       // If payment was successful, refresh match details
-      if (result == true) {
-        context.read<MatchViewModel>().fetchMatchById(widget.matchId);
+      if (result == true && context.mounted) {
+        context.read<MatchViewModel>().fetchMatchById(widget.matchId, refresh: true);
       }
     });
   }
 
+  /// Request to join a private match (creates PENDING status, waits for host approval)
+  Future<void> _requestToJoin(BuildContext context, MatchWithDetails match) async {
+    final matchVM = context.read<MatchViewModel>();
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    
+    try {
+      await matchVM.joinMatch(match.id);
+      if (context.mounted) {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+            content: Text('Join request sent! Waiting for host approval.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        // Refresh to show updated status
+        matchVM.fetchMatchById(widget.matchId, refresh: true);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('Failed to send request: $e'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _leaveMatch(BuildContext context, String matchId) async {
     final matchVM = context.read<MatchViewModel>();
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
     try {
       await matchVM.leaveMatch(matchId);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        scaffoldMessenger.showSnackBar(
           const SnackBar(
             content: Text('Left the match'),
             backgroundColor: Colors.orange,
@@ -539,7 +688,7 @@ class _MatchDetailViewState extends State<MatchDetailView> {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text('Failed to leave: $e'),
             backgroundColor: AppTheme.errorColor,
@@ -556,8 +705,63 @@ class _MatchDetailViewState extends State<MatchDetailView> {
     bool accept,
   ) async {
     final matchVM = context.read<MatchViewModel>();
+    final player = matchVM.selectedMatch?.players
+        .firstWhere(
+          (p) => p.userId == playerId,
+          orElse: () => MatchPlayer(
+            id: '',
+            userId: playerId,
+            matchId: matchId,
+            status: MatchPlayerStatus.pending,
+            joinedAt: DateTime.now(),
+          ),
+        );
+    final playerName = player?.user?.displayName ?? 'this player';
+    final matchPlayerId = player?.id ?? '';
+    
+    if (matchPlayerId.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Player not found'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
+      return;
+    }
+    
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(accept ? 'Accept Player' : 'Reject Player'),
+        content: Text(
+          accept 
+              ? 'Accept $playerName to join the match?'
+              : 'Reject $playerName\'s request to join?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: accept ? Colors.green : Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(accept ? 'Accept' : 'Reject'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirmed != true) return;
+    
     try {
-      await matchVM.respondToJoinRequest(matchId, playerId, accept: accept);
+      await matchVM.respondToJoinRequest(matchId, matchPlayerId, accept: accept);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

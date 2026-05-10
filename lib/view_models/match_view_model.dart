@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
+import 'dart:io';
 
 import '../models/match.dart';
 import '../repositories/match_repository.dart';
+import '../core/utils/image_utils.dart';
 
 /// State for match operations
 enum MatchState {
@@ -51,6 +53,12 @@ class MatchViewModel extends ChangeNotifier {
   bool _isLeaving = false;
   bool _isCreating = false;
   bool _isRespondingToRequest = false;
+  bool _isFetchingJoinRequests = false;
+
+  // Join requests state
+  List<MatchPlayer> _joinRequests = [];
+  MatchState _joinRequestsState = MatchState.initial;
+  String? _joinRequestsError;
 
   // Getters - Browse
   MatchState get browseState => _browseState;
@@ -92,6 +100,12 @@ class MatchViewModel extends ChangeNotifier {
   bool get isLeaving => _isLeaving;
   bool get isCreating => _isCreating;
   bool get isRespondingToRequest => _isRespondingToRequest;
+  bool get isFetchingJoinRequests => _isFetchingJoinRequests;
+
+  // Getters - Join Requests
+  List<MatchPlayer> get joinRequests => List.unmodifiable(_joinRequests);
+  MatchState get joinRequestsState => _joinRequestsState;
+  String? get joinRequestsError => _joinRequestsError;
 
   // ==================== Browse Matches ====================
 
@@ -189,7 +203,7 @@ class MatchViewModel extends ChangeNotifier {
   // ==================== My Matches (Hosted) ====================
 
   /// Fetch hosted matches
-  Future<void> fetchHostedMatches({bool refresh = false}) async {
+  Future<void> fetchHostedMatches({bool refresh = false, bool includeExpired = false}) async {
     if (_hostedState == MatchState.loading && !refresh) return;
 
     _hostedState = MatchState.loading;
@@ -199,6 +213,7 @@ class MatchViewModel extends ChangeNotifier {
     try {
       _hostedMatches = await _matchRepository.fetchHostedMatches(
         forceRefresh: refresh,
+        includeExpired: includeExpired,
       );
       _hostedState = MatchState.loaded;
     } catch (e) {
@@ -218,7 +233,7 @@ class MatchViewModel extends ChangeNotifier {
   // ==================== Joined Matches ====================
 
   /// Fetch joined matches
-  Future<void> fetchJoinedMatches({bool refresh = false}) async {
+  Future<void> fetchJoinedMatches({bool refresh = false, bool includeExpired = false}) async {
     if (_joinedState == MatchState.loading && !refresh) return;
 
     _joinedState = MatchState.loading;
@@ -228,6 +243,7 @@ class MatchViewModel extends ChangeNotifier {
     try {
       _joinedMatches = await _matchRepository.fetchJoinedMatches(
         forceRefresh: refresh,
+        includeExpired: includeExpired,
       );
       _joinedState = MatchState.loaded;
     } catch (e) {
@@ -247,13 +263,14 @@ class MatchViewModel extends ChangeNotifier {
   // ==================== Selected Match ====================
 
   /// Fetch match by ID
+  /// Set refresh=true to bypass cache and get fresh data with currentUserStatus
   Future<void> fetchMatchById(String id, {bool refresh = false}) async {
     _selectedMatchState = MatchState.loading;
     _selectedMatchError = null;
     notifyListeners();
 
     try {
-      _selectedMatch = await _matchRepository.fetchMatchById(id);
+      _selectedMatch = await _matchRepository.fetchMatchById(id, forceRefresh: refresh);
       _selectedMatchState = MatchState.loaded;
     } catch (e) {
       debugPrint('Failed to fetch match: $e');
@@ -287,6 +304,46 @@ class MatchViewModel extends ChangeNotifier {
       return match;
     } catch (e) {
       debugPrint('Failed to create match: $e');
+      _isCreating = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Create a new match with images (with compression)
+  Future<MatchWithDetails?> createMatchWithImages(
+    CreateMatchRequest request,
+    List<File> images,
+  ) async {
+    _isCreating = true;
+    notifyListeners();
+
+    try {
+      // Compress images before upload
+      final compressedImages = await ImageUtils.compressImages(
+        images,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        quality: 85,
+      );
+
+      // Filter out null (failed compression) images
+      final validImages = compressedImages.whereType<File>().toList();
+
+      if (validImages.isEmpty && images.isNotEmpty) {
+        throw Exception('Failed to compress images. Please try again.');
+      }
+
+      final match = await _matchRepository.createMatchWithImages(
+        request,
+        validImages,
+      );
+
+      _isCreating = false;
+      notifyListeners();
+      return match;
+    } catch (e) {
+      debugPrint('Failed to create match with images: $e');
       _isCreating = false;
       notifyListeners();
       rethrow;
@@ -392,6 +449,9 @@ class MatchViewModel extends ChangeNotifier {
       // Refresh hosted matches
       await fetchHostedMatches(refresh: true);
       
+      // Refresh join requests
+      await fetchJoinRequests(matchId, refresh: true);
+      
       _isRespondingToRequest = false;
       notifyListeners();
       return true;
@@ -401,6 +461,33 @@ class MatchViewModel extends ChangeNotifier {
       notifyListeners();
       rethrow;
     }
+  }
+
+  /// Fetch join requests for a match (host only)
+  Future<void> fetchJoinRequests(String matchId, {bool refresh = false, MatchPlayerStatus? status}) async {
+    if (_isFetchingJoinRequests && !refresh) return;
+
+    _isFetchingJoinRequests = true;
+    _joinRequestsState = MatchState.loading;
+    _joinRequestsError = null;
+    notifyListeners();
+
+    try {
+      final requests = await _matchRepository.fetchJoinRequests(
+        matchId,
+        status: status,
+      );
+
+      _joinRequests = requests;
+      _joinRequestsState = MatchState.loaded;
+    } catch (e) {
+      debugPrint('Failed to fetch join requests: $e');
+      _joinRequestsError = e.toString();
+      _joinRequestsState = MatchState.error;
+    }
+
+    _isFetchingJoinRequests = false;
+    notifyListeners();
   }
 
   // ==================== Utility Methods ====================

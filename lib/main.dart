@@ -39,13 +39,22 @@ class SmatchBadmintonApp extends StatelessWidget {
     final courtService = CourtService();
     final courtRepository = CourtRepository(courtService: courtService);
     final locationService = LocationService();
+    
+    // Create MatchViewModel first so we can wire the logout callback
+    final matchViewModel = MatchViewModel();
+    
+    // Create AuthViewModel with logout callback to clear match cache
+    final authViewModel = AuthViewModel(
+      onLogout: () {
+        // Clear all user-specific cached data when user logs out
+        matchViewModel.clearCache();
+      },
+    )..initialize();
 
     return MultiProvider(
       providers: [
         // Auth ViewModel - manages authentication state
-        ChangeNotifierProvider(
-          create: (_) => AuthViewModel()..initialize(),
-        ),
+        ChangeNotifierProvider.value(value: authViewModel),
         // Map View Model
         ChangeNotifierProvider(
           create: (_) => MapViewModel(
@@ -54,9 +63,7 @@ class SmatchBadmintonApp extends StatelessWidget {
           ),
         ),
         // Match View Model
-        ChangeNotifierProvider(
-          create: (_) => MatchViewModel(),
-        ),
+        ChangeNotifierProvider.value(value: matchViewModel),
         // Search View Model
         ChangeNotifierProvider(
           create: (_) => SearchViewModel(courtRepository: courtRepository),

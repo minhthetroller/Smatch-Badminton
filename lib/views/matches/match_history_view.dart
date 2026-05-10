@@ -19,7 +19,10 @@ class _MatchHistoryViewState extends State<MatchHistoryView> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<MatchViewModel>().fetchJoinedMatches(refresh: true);
+      final matchVM = context.read<MatchViewModel>();
+      // Fetch all matches including expired ones for full history
+      matchVM.fetchJoinedMatches(refresh: true, includeExpired: true);
+      matchVM.fetchHostedMatches(refresh: true, includeExpired: true);
     });
   }
 
@@ -45,40 +48,87 @@ class _MatchHistoryViewState extends State<MatchHistoryView> {
       ),
       body: Consumer<MatchViewModel>(
         builder: (context, matchVM, _) {
-          if (matchVM.isJoinedLoading && matchVM.joinedMatches.isEmpty) {
+          final isLoading = matchVM.isHostedLoading && matchVM.isJoinedLoading;
+          final hasError = matchVM.hostedState == MatchState.error ||
+              matchVM.joinedState == MatchState.error;
+          final isEmpty =
+              matchVM.hostedMatches.isEmpty && matchVM.joinedMatches.isEmpty;
+
+          if (isLoading && isEmpty) {
             return const Center(
               child: CircularProgressIndicator(color: AppTheme.primaryColor),
             );
           }
 
-          if (matchVM.joinedState == MatchState.error &&
-              matchVM.joinedMatches.isEmpty) {
+          if (hasError && isEmpty) {
             return _buildErrorState(
-              matchVM.joinedError ?? 'Failed to load match history',
-              () => matchVM.fetchJoinedMatches(refresh: true),
+              matchVM.hostedError ??
+                  matchVM.joinedError ??
+                  'Failed to load match history',
+              () {
+                matchVM.fetchJoinedMatches(refresh: true, includeExpired: true);
+                matchVM.fetchHostedMatches(refresh: true, includeExpired: true);
+              },
             );
           }
 
-          if (matchVM.joinedMatches.isEmpty) {
+          if (isEmpty) {
             return _buildEmptyState();
           }
 
           return RefreshIndicator(
-            onRefresh: () => matchVM.refreshJoinedMatches(),
+            onRefresh: () async {
+              await Future.wait([
+                matchVM.fetchJoinedMatches(refresh: true, includeExpired: true),
+                matchVM.fetchHostedMatches(refresh: true, includeExpired: true),
+              ]);
+            },
             color: AppTheme.primaryColor,
-            child: ListView.builder(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
-              itemCount: matchVM.joinedMatches.length,
-              itemBuilder: (context, index) {
-                final match = matchVM.joinedMatches[index];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: MatchCard(
-                    match: match,
-                    onTap: () => _navigateToMatchDetail(match.id),
-                  ),
-                );
-              },
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Hosted Matches Section
+                  if (matchVM.hostedMatches.isNotEmpty) ...[
+                    _SectionHeader(
+                      title: 'Hosted by me',
+                      count: matchVM.hostedMatches.length,
+                    ),
+                    const SizedBox(height: 12),
+                    ...matchVM.hostedMatches.map(
+                      (match) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: MatchCard(
+                          match: match,
+                          isHosted: true,
+                          onTap: () => _navigateToMatchDetail(match.id),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // Joined Matches Section
+                  if (matchVM.joinedMatches.isNotEmpty) ...[
+                    _SectionHeader(
+                      title: 'Joined',
+                      count: matchVM.joinedMatches.length,
+                    ),
+                    const SizedBox(height: 12),
+                    ...matchVM.joinedMatches.map(
+                      (match) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: MatchCard(
+                          match: match,
+                          onTap: () => _navigateToMatchDetail(match.id),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           );
         },
@@ -117,7 +167,7 @@ class _MatchHistoryViewState extends State<MatchHistoryView> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Join a match to see it here',
+              'Join or create a match to see it here',
               style: TextStyle(
                 fontSize: 14,
                 color: AppTheme.textHint,
@@ -163,6 +213,49 @@ class _MatchHistoryViewState extends State<MatchHistoryView> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Section header widget
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final int count;
+
+  const _SectionHeader({
+    required this.title,
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimary,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: AppTheme.primaryColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            count.toString(),
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.primaryColor,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
