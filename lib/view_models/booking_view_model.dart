@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 
 import '../models/availability.dart';
+import '../models/booking.dart';
 import '../models/court.dart';
 import '../repositories/court_repository.dart';
 
@@ -13,10 +14,8 @@ class BookingViewModel extends ChangeNotifier {
   final CourtRepository _courtRepository;
   final Court court;
 
-  BookingViewModel({
-    required this.court,
-    CourtRepository? courtRepository,
-  }) : _courtRepository = courtRepository ?? CourtRepository();
+  BookingViewModel({required this.court, CourtRepository? courtRepository})
+    : _courtRepository = courtRepository ?? CourtRepository();
 
   // State
   BookingViewState _state = BookingViewState.initial;
@@ -28,7 +27,8 @@ class BookingViewModel extends ChangeNotifier {
 
   // Time slot constants
   static const int slotDurationMinutes = 30;
-  static const double defaultPricePerSlot = 35000.0; // Default price per 30-min slot in VND
+  static const double defaultPricePerSlot =
+      35000.0; // Default price per 30-min slot in VND
 
   // Getters
   BookingViewState get state => _state;
@@ -119,20 +119,25 @@ class BookingViewModel extends ChangeNotifier {
       for (int hour = 7; hour < 22; hour++) {
         for (int minute = 0; minute < 60; minute += 30) {
           // Simulate some booked slots
-          final isBooked = (index == 1 && hour >= 7 && hour < 9) ||
+          final isBooked =
+              (index == 1 && hour >= 7 && hour < 9) ||
               (index == 1 && hour >= 17 && hour < 18) ||
               (index == 0 && hour >= 10 && hour < 12);
 
           final endMinute = minute + 30;
           final endHour = hour + (endMinute >= 60 ? 1 : 0);
 
-          slots.add(TimeSlot(
-            startTime: '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}',
-            endTime: '${endHour.toString().padLeft(2, '0')}:${(endMinute % 60).toString().padLeft(2, '0')}',
-            isBooked: isBooked,
-            bookedBy: isBooked ? null : null,
-            price: 35000.0, // 35,000 VND per 30-min slot
-          ));
+          slots.add(
+            TimeSlot(
+              startTime:
+                  '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}',
+              endTime:
+                  '${endHour.toString().padLeft(2, '0')}:${(endMinute % 60).toString().padLeft(2, '0')}',
+              isBooked: isBooked,
+              bookedBy: isBooked ? null : null,
+              price: 35000.0, // 35,000 VND per 30-min slot
+            ),
+          );
         }
       }
 
@@ -176,14 +181,14 @@ class BookingViewModel extends ChangeNotifier {
   bool get isToday {
     final now = DateTime.now();
     return _selectedDate.year == now.year &&
-           _selectedDate.month == now.month &&
-           _selectedDate.day == now.day;
+        _selectedDate.month == now.month &&
+        _selectedDate.day == now.day;
   }
 
   /// Check if a time slot has passed (only applicable for today)
   bool isSlotPassed(int hour, int minute) {
     if (!isToday) return false;
-    
+
     final now = DateTime.now();
     final slotTime = DateTime(now.year, now.month, now.day, hour, minute);
     return slotTime.isBefore(now);
@@ -193,7 +198,7 @@ class BookingViewModel extends ChangeNotifier {
   bool isSlotAvailable(int subCourtIndex, int hour, int minute) {
     // Check if time has passed (for today)
     if (isSlotPassed(hour, minute)) return false;
-    
+
     final slot = getBookingForSlot(subCourtIndex, hour, minute);
     // Slot is available only if it exists in API data and is not booked
     return slot != null && !slot.isBooked;
@@ -212,7 +217,8 @@ class BookingViewModel extends ChangeNotifier {
     if (subCourtIndex < 0 || subCourtIndex >= subCourts.length) return null;
 
     final subCourt = subCourts[subCourtIndex];
-    final timeStr = '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+    final timeStr =
+        '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
 
     for (final slot in subCourt.timeSlots) {
       if (slot.startTime == timeStr) {
@@ -238,6 +244,7 @@ class BookingViewModel extends ChangeNotifier {
 
     final slot = SelectedSlot(
       subCourtIndex: subCourtIndex,
+      subCourtId: subCourt.id,
       subCourtName: subCourt.name,
       hour: hour,
       minute: minute,
@@ -266,7 +273,8 @@ class BookingViewModel extends ChangeNotifier {
   /// Requires at least 1 hour (2 slots) per court
   bool get canBook {
     if (_selection.isEmpty) return false;
-    
+    if (!_hasOnlyBookableSubCourtIds) return false;
+
     // Check each court has at least minSlotsPerCourt (1 hour)
     final slotsByCourt = _selection.slotsByCourtIndex;
     for (final courtSlots in slotsByCourt.values) {
@@ -277,10 +285,20 @@ class BookingViewModel extends ChangeNotifier {
     return true;
   }
 
+  bool get _hasOnlyBookableSubCourtIds {
+    return _selection.slots.every(
+      (slot) => CreateBookingRequest.isValidSubCourtId(slot.subCourtId),
+    );
+  }
+
   /// Get validation message if booking cannot proceed
   String? get bookingValidationMessage {
     if (_selection.isEmpty) return null;
-    
+
+    if (!_hasOnlyBookableSubCourtIds) {
+      return 'Could not load real court availability. Please refresh and try again.';
+    }
+
     final slotsByCourt = _selection.slotsByCourtIndex;
     for (final entry in slotsByCourt.entries) {
       if (entry.value.length < minSlotsPerCourt) {
@@ -302,7 +320,9 @@ class BookingViewModel extends ChangeNotifier {
     // TODO: Implement actual booking API call
     debugPrint('Booking confirmed:');
     for (final summary in bookingSummaries) {
-      debugPrint('  ${summary.subCourtName}: ${summary.timeRanges.map((r) => r.formatted).join(', ')}');
+      debugPrint(
+        '  ${summary.subCourtName}: ${summary.timeRanges.map((r) => r.formatted).join(', ')}',
+      );
     }
     debugPrint('Total price: ${formatPriceVND(totalPrice)}');
 

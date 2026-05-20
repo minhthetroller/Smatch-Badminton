@@ -40,32 +40,49 @@ void main() {
 
       test('should format date correctly', () {
         expect(viewModel.formattedDate, isNotEmpty);
-        expect(viewModel.apiFormattedDate, matches(RegExp(r'\d{4}-\d{2}-\d{2}')));
+        expect(
+          viewModel.apiFormattedDate,
+          matches(RegExp(r'\d{4}-\d{2}-\d{2}')),
+        );
       });
     });
 
     group('loadAvailability', () {
       test('should set loading state then loaded state', () async {
-        when(mockCourtRepository.fetchCourtAvailability(
-          courtId: anyNamed('courtId'),
-          date: anyNamed('date'),
-        )).thenAnswer((_) async => CourtAvailability(
-              courtId: 'court-123',
-              date: viewModel.apiFormattedDate,
-              openTime: '07:00',
-              closeTime: '22:00',
-              subCourts: [
-                const SubCourt(
-                  id: 'sc-1',
-                  name: 'Court 1',
-                  courtNumber: 1,
-                  timeSlots: [
-                    TimeSlot(startTime: '07:00', endTime: '07:30', isBooked: false, price: 35000),
-                    TimeSlot(startTime: '07:30', endTime: '08:00', isBooked: true, price: 35000),
-                  ],
-                ),
-              ],
-            ));
+        when(
+          mockCourtRepository.fetchCourtAvailability(
+            courtId: anyNamed('courtId'),
+            date: anyNamed('date'),
+          ),
+        ).thenAnswer(
+          (_) async => CourtAvailability(
+            courtId: 'court-123',
+            date: viewModel.apiFormattedDate,
+            openTime: '07:00',
+            closeTime: '22:00',
+            subCourts: [
+              const SubCourt(
+                id: '11111111-1111-1111-1111-111111111111',
+                name: 'Court 1',
+                courtNumber: 1,
+                timeSlots: [
+                  TimeSlot(
+                    startTime: '07:00',
+                    endTime: '07:30',
+                    isBooked: false,
+                    price: 35000,
+                  ),
+                  TimeSlot(
+                    startTime: '07:30',
+                    endTime: '08:00',
+                    isBooked: true,
+                    price: 35000,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
 
         await viewModel.loadAvailability();
 
@@ -75,10 +92,12 @@ void main() {
       });
 
       test('should generate mock data on API error', () async {
-        when(mockCourtRepository.fetchCourtAvailability(
-          courtId: anyNamed('courtId'),
-          date: anyNamed('date'),
-        )).thenThrow(Exception('Network error'));
+        when(
+          mockCourtRepository.fetchCourtAvailability(
+            courtId: anyNamed('courtId'),
+            date: anyNamed('date'),
+          ),
+        ).thenThrow(Exception('Network error'));
 
         await viewModel.loadAvailability();
 
@@ -88,16 +107,45 @@ void main() {
         expect(viewModel.subCourts, isNotEmpty);
       });
 
+      test(
+        'should not allow booking with synthetic mock sub-court IDs',
+        () async {
+          when(
+            mockCourtRepository.fetchCourtAvailability(
+              courtId: anyNamed('courtId'),
+              date: anyNamed('date'),
+            ),
+          ).thenThrow(Exception('Network error'));
+
+          await viewModel.selectDate(
+            DateTime.now().add(const Duration(days: 7)),
+          );
+          viewModel.toggleSlotSelection(0, 12, 0);
+          viewModel.toggleSlotSelection(0, 12, 30);
+
+          expect(viewModel.selectedSlotCount, 2);
+          expect(viewModel.canBook, isFalse);
+          expect(
+            viewModel.bookingValidationMessage,
+            contains('real court availability'),
+          );
+        },
+      );
+
       test('should set operating hours from availability', () async {
-        when(mockCourtRepository.fetchCourtAvailability(
-          courtId: anyNamed('courtId'),
-          date: anyNamed('date'),
-        )).thenAnswer((_) async => const CourtAvailability(
-              courtId: 'court-123',
-              date: '2024-01-20',
-              openTime: '06:00',
-              closeTime: '23:00',
-            ));
+        when(
+          mockCourtRepository.fetchCourtAvailability(
+            courtId: anyNamed('courtId'),
+            date: anyNamed('date'),
+          ),
+        ).thenAnswer(
+          (_) async => const CourtAvailability(
+            courtId: 'court-123',
+            date: '2024-01-20',
+            openTime: '06:00',
+            closeTime: '23:00',
+          ),
+        );
 
         await viewModel.loadAvailability();
 
@@ -108,19 +156,31 @@ void main() {
 
     group('selectSubCourt', () {
       test('should update selected sub court index', () async {
-        when(mockCourtRepository.fetchCourtAvailability(
-          courtId: anyNamed('courtId'),
-          date: anyNamed('date'),
-        )).thenAnswer((_) async => const CourtAvailability(
-              courtId: 'court-123',
-              date: '2024-01-20',
-              openTime: '07:00',
-              closeTime: '22:00',
-              subCourts: [
-                SubCourt(id: 'sc-1', name: 'Court 1', courtNumber: 1),
-                SubCourt(id: 'sc-2', name: 'Court 2', courtNumber: 2),
-              ],
-            ));
+        when(
+          mockCourtRepository.fetchCourtAvailability(
+            courtId: anyNamed('courtId'),
+            date: anyNamed('date'),
+          ),
+        ).thenAnswer(
+          (_) async => const CourtAvailability(
+            courtId: 'court-123',
+            date: '2024-01-20',
+            openTime: '07:00',
+            closeTime: '22:00',
+            subCourts: [
+              SubCourt(
+                id: '11111111-1111-1111-1111-111111111111',
+                name: 'Court 1',
+                courtNumber: 1,
+              ),
+              SubCourt(
+                id: '22222222-2222-2222-2222-222222222222',
+                name: 'Court 2',
+                courtNumber: 2,
+              ),
+            ],
+          ),
+        );
 
         await viewModel.loadAvailability();
         viewModel.selectSubCourt(1);
@@ -130,18 +190,26 @@ void main() {
       });
 
       test('should not update for invalid index', () async {
-        when(mockCourtRepository.fetchCourtAvailability(
-          courtId: anyNamed('courtId'),
-          date: anyNamed('date'),
-        )).thenAnswer((_) async => const CourtAvailability(
-              courtId: 'court-123',
-              date: '2024-01-20',
-              openTime: '07:00',
-              closeTime: '22:00',
-              subCourts: [
-                SubCourt(id: 'sc-1', name: 'Court 1', courtNumber: 1),
-              ],
-            ));
+        when(
+          mockCourtRepository.fetchCourtAvailability(
+            courtId: anyNamed('courtId'),
+            date: anyNamed('date'),
+          ),
+        ).thenAnswer(
+          (_) async => const CourtAvailability(
+            courtId: 'court-123',
+            date: '2024-01-20',
+            openTime: '07:00',
+            closeTime: '22:00',
+            subCourts: [
+              SubCourt(
+                id: '11111111-1111-1111-1111-111111111111',
+                name: 'Court 1',
+                courtNumber: 1,
+              ),
+            ],
+          ),
+        );
 
         await viewModel.loadAvailability();
         viewModel.selectSubCourt(5);
@@ -152,49 +220,64 @@ void main() {
 
     group('selectDate', () {
       test('should update date and reload availability', () async {
-        when(mockCourtRepository.fetchCourtAvailability(
-          courtId: anyNamed('courtId'),
-          date: anyNamed('date'),
-        )).thenAnswer((_) async => const CourtAvailability(
-              courtId: 'court-123',
-              date: '2024-01-21',
-              openTime: '07:00',
-              closeTime: '22:00',
-            ));
+        when(
+          mockCourtRepository.fetchCourtAvailability(
+            courtId: anyNamed('courtId'),
+            date: anyNamed('date'),
+          ),
+        ).thenAnswer(
+          (_) async => const CourtAvailability(
+            courtId: 'court-123',
+            date: '2024-01-21',
+            openTime: '07:00',
+            closeTime: '22:00',
+          ),
+        );
 
         final newDate = DateTime.now().add(const Duration(days: 3));
         await viewModel.selectDate(newDate);
 
         expect(viewModel.selectedDate, newDate);
-        verify(mockCourtRepository.fetchCourtAvailability(
-          courtId: 'court-123',
-          date: anyNamed('date'),
-        )).called(1);
+        verify(
+          mockCourtRepository.fetchCourtAvailability(
+            courtId: 'court-123',
+            date: anyNamed('date'),
+          ),
+        ).called(1);
       });
 
       test('should clear selections when changing date', () async {
         // First select a future date to avoid isSlotPassed issues
         final futureDate = DateTime.now().add(const Duration(days: 7));
-        
-        when(mockCourtRepository.fetchCourtAvailability(
-          courtId: anyNamed('courtId'),
-          date: anyNamed('date'),
-        )).thenAnswer((_) async => const CourtAvailability(
-              courtId: 'court-123',
-              date: '2024-01-27',
-              openTime: '07:00',
-              closeTime: '22:00',
-              subCourts: [
-                SubCourt(
-                  id: 'sc-1',
-                  name: 'Court 1',
-                  courtNumber: 1,
-                  timeSlots: [
-                    TimeSlot(startTime: '10:00', endTime: '10:30', isBooked: false, price: 35000),
-                  ],
-                ),
-              ],
-            ));
+
+        when(
+          mockCourtRepository.fetchCourtAvailability(
+            courtId: anyNamed('courtId'),
+            date: anyNamed('date'),
+          ),
+        ).thenAnswer(
+          (_) async => const CourtAvailability(
+            courtId: 'court-123',
+            date: '2024-01-27',
+            openTime: '07:00',
+            closeTime: '22:00',
+            subCourts: [
+              SubCourt(
+                id: '11111111-1111-1111-1111-111111111111',
+                name: 'Court 1',
+                courtNumber: 1,
+                timeSlots: [
+                  TimeSlot(
+                    startTime: '10:00',
+                    endTime: '10:30',
+                    isBooked: false,
+                    price: 35000,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
 
         await viewModel.selectDate(futureDate);
         viewModel.toggleSlotSelection(0, 10, 0);
@@ -210,37 +293,71 @@ void main() {
     group('slot selection', () {
       setUp(() async {
         // Configure mock FIRST before calling selectDate
-        when(mockCourtRepository.fetchCourtAvailability(
-          courtId: anyNamed('courtId'),
-          date: anyNamed('date'),
-        )).thenAnswer((_) async => const CourtAvailability(
-              courtId: 'court-123',
-              date: '2024-01-27',
-              openTime: '07:00',
-              closeTime: '22:00',
-              subCourts: [
-                SubCourt(
-                  id: 'sc-1',
-                  name: 'Court 1',
-                  courtNumber: 1,
-                  timeSlots: [
-                    TimeSlot(startTime: '10:00', endTime: '10:30', isBooked: false, price: 35000),
-                    TimeSlot(startTime: '10:30', endTime: '11:00', isBooked: false, price: 35000),
-                    TimeSlot(startTime: '11:00', endTime: '11:30', isBooked: true, price: 35000),
-                    TimeSlot(startTime: '11:30', endTime: '12:00', isBooked: false, price: 35000),
-                  ],
-                ),
-                SubCourt(
-                  id: 'sc-2',
-                  name: 'Court 2',
-                  courtNumber: 2,
-                  timeSlots: [
-                    TimeSlot(startTime: '10:00', endTime: '10:30', isBooked: false, price: 40000),
-                    TimeSlot(startTime: '10:30', endTime: '11:00', isBooked: false, price: 40000),
-                  ],
-                ),
-              ],
-            ));
+        when(
+          mockCourtRepository.fetchCourtAvailability(
+            courtId: anyNamed('courtId'),
+            date: anyNamed('date'),
+          ),
+        ).thenAnswer(
+          (_) async => const CourtAvailability(
+            courtId: 'court-123',
+            date: '2024-01-27',
+            openTime: '07:00',
+            closeTime: '22:00',
+            subCourts: [
+              SubCourt(
+                id: '11111111-1111-1111-1111-111111111111',
+                name: 'Court 1',
+                courtNumber: 1,
+                timeSlots: [
+                  TimeSlot(
+                    startTime: '10:00',
+                    endTime: '10:30',
+                    isBooked: false,
+                    price: 35000,
+                  ),
+                  TimeSlot(
+                    startTime: '10:30',
+                    endTime: '11:00',
+                    isBooked: false,
+                    price: 35000,
+                  ),
+                  TimeSlot(
+                    startTime: '11:00',
+                    endTime: '11:30',
+                    isBooked: true,
+                    price: 35000,
+                  ),
+                  TimeSlot(
+                    startTime: '11:30',
+                    endTime: '12:00',
+                    isBooked: false,
+                    price: 35000,
+                  ),
+                ],
+              ),
+              SubCourt(
+                id: '22222222-2222-2222-2222-222222222222',
+                name: 'Court 2',
+                courtNumber: 2,
+                timeSlots: [
+                  TimeSlot(
+                    startTime: '10:00',
+                    endTime: '10:30',
+                    isBooked: false,
+                    price: 40000,
+                  ),
+                  TimeSlot(
+                    startTime: '10:30',
+                    endTime: '11:00',
+                    isBooked: false,
+                    price: 40000,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
 
         // Use a future date to avoid isSlotPassed issues
         final futureDate = DateTime.now().add(const Duration(days: 7));
@@ -300,26 +417,40 @@ void main() {
     group('slot availability checks', () {
       setUp(() async {
         // Configure mock FIRST before calling selectDate
-        when(mockCourtRepository.fetchCourtAvailability(
-          courtId: anyNamed('courtId'),
-          date: anyNamed('date'),
-        )).thenAnswer((_) async => const CourtAvailability(
-              courtId: 'court-123',
-              date: '2024-01-27',
-              openTime: '07:00',
-              closeTime: '22:00',
-              subCourts: [
-                SubCourt(
-                  id: 'sc-1',
-                  name: 'Court 1',
-                  courtNumber: 1,
-                  timeSlots: [
-                    TimeSlot(startTime: '10:00', endTime: '10:30', isBooked: false, price: 35000),
-                    TimeSlot(startTime: '11:00', endTime: '11:30', isBooked: true, price: 35000),
-                  ],
-                ),
-              ],
-            ));
+        when(
+          mockCourtRepository.fetchCourtAvailability(
+            courtId: anyNamed('courtId'),
+            date: anyNamed('date'),
+          ),
+        ).thenAnswer(
+          (_) async => const CourtAvailability(
+            courtId: 'court-123',
+            date: '2024-01-27',
+            openTime: '07:00',
+            closeTime: '22:00',
+            subCourts: [
+              SubCourt(
+                id: '11111111-1111-1111-1111-111111111111',
+                name: 'Court 1',
+                courtNumber: 1,
+                timeSlots: [
+                  TimeSlot(
+                    startTime: '10:00',
+                    endTime: '10:30',
+                    isBooked: false,
+                    price: 35000,
+                  ),
+                  TimeSlot(
+                    startTime: '11:00',
+                    endTime: '11:30',
+                    isBooked: true,
+                    price: 35000,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
 
         // Use a future date to avoid isSlotPassed issues
         final futureDate = DateTime.now().add(const Duration(days: 7));
@@ -351,27 +482,46 @@ void main() {
     group('booking validation', () {
       setUp(() async {
         // Configure mock FIRST before calling selectDate
-        when(mockCourtRepository.fetchCourtAvailability(
-          courtId: anyNamed('courtId'),
-          date: anyNamed('date'),
-        )).thenAnswer((_) async => const CourtAvailability(
-              courtId: 'court-123',
-              date: '2024-01-27',
-              openTime: '07:00',
-              closeTime: '22:00',
-              subCourts: [
-                SubCourt(
-                  id: 'sc-1',
-                  name: 'Court 1',
-                  courtNumber: 1,
-                  timeSlots: [
-                    TimeSlot(startTime: '10:00', endTime: '10:30', isBooked: false, price: 35000),
-                    TimeSlot(startTime: '10:30', endTime: '11:00', isBooked: false, price: 35000),
-                    TimeSlot(startTime: '11:00', endTime: '11:30', isBooked: false, price: 35000),
-                  ],
-                ),
-              ],
-            ));
+        when(
+          mockCourtRepository.fetchCourtAvailability(
+            courtId: anyNamed('courtId'),
+            date: anyNamed('date'),
+          ),
+        ).thenAnswer(
+          (_) async => const CourtAvailability(
+            courtId: 'court-123',
+            date: '2024-01-27',
+            openTime: '07:00',
+            closeTime: '22:00',
+            subCourts: [
+              SubCourt(
+                id: '11111111-1111-1111-1111-111111111111',
+                name: 'Court 1',
+                courtNumber: 1,
+                timeSlots: [
+                  TimeSlot(
+                    startTime: '10:00',
+                    endTime: '10:30',
+                    isBooked: false,
+                    price: 35000,
+                  ),
+                  TimeSlot(
+                    startTime: '10:30',
+                    endTime: '11:00',
+                    isBooked: false,
+                    price: 35000,
+                  ),
+                  TimeSlot(
+                    startTime: '11:00',
+                    endTime: '11:30',
+                    isBooked: false,
+                    price: 35000,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
 
         // Use a future date to avoid isSlotPassed issues
         final futureDate = DateTime.now().add(const Duration(days: 7));
@@ -402,25 +552,34 @@ void main() {
     group('clearSelection', () {
       test('should clear all selections', () async {
         // Configure mock FIRST before calling selectDate
-        when(mockCourtRepository.fetchCourtAvailability(
-          courtId: anyNamed('courtId'),
-          date: anyNamed('date'),
-        )).thenAnswer((_) async => const CourtAvailability(
-              courtId: 'court-123',
-              date: '2024-01-27',
-              openTime: '07:00',
-              closeTime: '22:00',
-              subCourts: [
-                SubCourt(
-                  id: 'sc-1',
-                  name: 'Court 1',
-                  courtNumber: 1,
-                  timeSlots: [
-                    TimeSlot(startTime: '10:00', endTime: '10:30', isBooked: false, price: 35000),
-                  ],
-                ),
-              ],
-            ));
+        when(
+          mockCourtRepository.fetchCourtAvailability(
+            courtId: anyNamed('courtId'),
+            date: anyNamed('date'),
+          ),
+        ).thenAnswer(
+          (_) async => const CourtAvailability(
+            courtId: 'court-123',
+            date: '2024-01-27',
+            openTime: '07:00',
+            closeTime: '22:00',
+            subCourts: [
+              SubCourt(
+                id: '11111111-1111-1111-1111-111111111111',
+                name: 'Court 1',
+                courtNumber: 1,
+                timeSlots: [
+                  TimeSlot(
+                    startTime: '10:00',
+                    endTime: '10:30',
+                    isBooked: false,
+                    price: 35000,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
 
         // Use a future date to avoid isSlotPassed issues
         final futureDate = DateTime.now().add(const Duration(days: 7));
@@ -437,27 +596,46 @@ void main() {
     group('bookingSummaries', () {
       test('should generate correct booking summaries', () async {
         // Configure mock FIRST before calling selectDate
-        when(mockCourtRepository.fetchCourtAvailability(
-          courtId: anyNamed('courtId'),
-          date: anyNamed('date'),
-        )).thenAnswer((_) async => const CourtAvailability(
-              courtId: 'court-123',
-              date: '2024-01-27',
-              openTime: '07:00',
-              closeTime: '22:00',
-              subCourts: [
-                SubCourt(
-                  id: 'sc-1',
-                  name: 'Court 1',
-                  courtNumber: 1,
-                  timeSlots: [
-                    TimeSlot(startTime: '10:00', endTime: '10:30', isBooked: false, price: 35000),
-                    TimeSlot(startTime: '10:30', endTime: '11:00', isBooked: false, price: 35000),
-                    TimeSlot(startTime: '11:00', endTime: '11:30', isBooked: false, price: 35000),
-                  ],
-                ),
-              ],
-            ));
+        when(
+          mockCourtRepository.fetchCourtAvailability(
+            courtId: anyNamed('courtId'),
+            date: anyNamed('date'),
+          ),
+        ).thenAnswer(
+          (_) async => const CourtAvailability(
+            courtId: 'court-123',
+            date: '2024-01-27',
+            openTime: '07:00',
+            closeTime: '22:00',
+            subCourts: [
+              SubCourt(
+                id: '11111111-1111-1111-1111-111111111111',
+                name: 'Court 1',
+                courtNumber: 1,
+                timeSlots: [
+                  TimeSlot(
+                    startTime: '10:00',
+                    endTime: '10:30',
+                    isBooked: false,
+                    price: 35000,
+                  ),
+                  TimeSlot(
+                    startTime: '10:30',
+                    endTime: '11:00',
+                    isBooked: false,
+                    price: 35000,
+                  ),
+                  TimeSlot(
+                    startTime: '11:00',
+                    endTime: '11:30',
+                    isBooked: false,
+                    price: 35000,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
 
         // Use a future date to avoid isSlotPassed issues
         final futureDate = DateTime.now().add(const Duration(days: 7));
@@ -470,6 +648,7 @@ void main() {
         final summaries = viewModel.bookingSummaries;
 
         expect(summaries.length, 1);
+        expect(summaries[0].subCourtId, '11111111-1111-1111-1111-111111111111');
         expect(summaries[0].subCourtName, 'Court 1');
         expect(summaries[0].totalSlots, 3);
         expect(summaries[0].totalPrice, 105000);
@@ -488,4 +667,3 @@ void main() {
     });
   });
 }
-

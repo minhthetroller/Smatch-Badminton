@@ -201,7 +201,7 @@ void main() {
     group('toJson', () {
       test('should serialize complete request with all fields', () {
         const request = CreateBookingRequest(
-          subCourtId: 'subcourt-1',
+          subCourtId: '11111111-1111-1111-1111-111111111111',
           guestName: 'Nguyễn Văn A',
           guestPhone: '0912345678',
           guestEmail: 'test@example.com',
@@ -213,7 +213,7 @@ void main() {
 
         final json = request.toJson();
 
-        expect(json['subCourtId'], 'subcourt-1');
+        expect(json['subCourtId'], '11111111-1111-1111-1111-111111111111');
         expect(json['guestName'], 'Nguyễn Văn A');
         expect(json['guestPhone'], '0912345678');
         expect(json['guestEmail'], 'test@example.com');
@@ -225,7 +225,7 @@ void main() {
 
       test('should not include null optional fields', () {
         const request = CreateBookingRequest(
-          subCourtId: 'subcourt-2',
+          subCourtId: '22222222-2222-2222-2222-222222222222',
           guestName: 'Test User',
           guestPhone: '0987654321',
           date: '2024-01-21',
@@ -237,7 +237,7 @@ void main() {
 
         expect(json.containsKey('guestEmail'), isFalse);
         expect(json.containsKey('notes'), isFalse);
-        expect(json['subCourtId'], 'subcourt-2');
+        expect(json['subCourtId'], '22222222-2222-2222-2222-222222222222');
         expect(json['guestName'], 'Test User');
         expect(json['guestPhone'], '0987654321');
         expect(json['date'], '2024-01-21');
@@ -245,42 +245,87 @@ void main() {
         expect(json['endTime'], '15:00');
       });
 
-      test('should include guestEmail when provided, exclude notes when null', () {
+      test(
+        'should include guestEmail when provided, exclude notes when null',
+        () {
+          const request = CreateBookingRequest(
+            subCourtId: '33333333-3333-3333-3333-333333333333',
+            guestName: 'Another User',
+            guestPhone: '0123456789',
+            guestEmail: 'another@example.com',
+            date: '2024-01-22',
+            startTime: '08:00',
+            endTime: '09:00',
+          );
+
+          final json = request.toJson();
+
+          expect(json.containsKey('guestEmail'), isTrue);
+          expect(json['guestEmail'], 'another@example.com');
+          expect(json.containsKey('notes'), isFalse);
+        },
+      );
+
+      test(
+        'should include notes when provided, exclude guestEmail when null',
+        () {
+          const request = CreateBookingRequest(
+            subCourtId: '44444444-4444-4444-4444-444444444444',
+            guestName: 'Yet Another User',
+            guestPhone: '0111222333',
+            date: '2024-01-23',
+            startTime: '16:00',
+            endTime: '17:00',
+            notes: 'Some notes here',
+          );
+
+          final json = request.toJson();
+
+          expect(json.containsKey('guestEmail'), isFalse);
+          expect(json.containsKey('notes'), isTrue);
+          expect(json['notes'], 'Some notes here');
+        },
+      );
+
+      test('should trim subCourtId before serializing', () {
         const request = CreateBookingRequest(
-          subCourtId: 'subcourt-3',
-          guestName: 'Another User',
-          guestPhone: '0123456789',
-          guestEmail: 'another@example.com',
-          date: '2024-01-22',
-          startTime: '08:00',
-          endTime: '09:00',
-        );
-
-        final json = request.toJson();
-
-        expect(json.containsKey('guestEmail'), isTrue);
-        expect(json['guestEmail'], 'another@example.com');
-        expect(json.containsKey('notes'), isFalse);
-      });
-
-      test('should include notes when provided, exclude guestEmail when null', () {
-        const request = CreateBookingRequest(
-          subCourtId: 'subcourt-4',
-          guestName: 'Yet Another User',
+          subCourtId: ' 55555555-5555-5555-5555-555555555555 ',
+          guestName: 'Trimmed User',
           guestPhone: '0111222333',
           date: '2024-01-23',
           startTime: '16:00',
           endTime: '17:00',
-          notes: 'Some notes here',
         );
 
         final json = request.toJson();
 
-        expect(json.containsKey('guestEmail'), isFalse);
-        expect(json.containsKey('notes'), isTrue);
-        expect(json['notes'], 'Some notes here');
+        expect(json['subCourtId'], '55555555-5555-5555-5555-555555555555');
+      });
+    });
+
+    group('subCourtId validation', () {
+      test('should accept database UUIDs', () {
+        expect(
+          CreateBookingRequest.isValidSubCourtId(
+            '11111111-1111-1111-1111-111111111111',
+          ),
+          isTrue,
+        );
+        expect(
+          CreateBookingRequest.validateSubCourtId(
+            '11111111-1111-1111-1111-111111111111',
+          ),
+          isNull,
+        );
+      });
+
+      test('should reject synthetic sub-court IDs', () {
+        expect(CreateBookingRequest.isValidSubCourtId('subcourt-2'), isFalse);
+        expect(
+          CreateBookingRequest.validateSubCourtId('subcourt-2'),
+          contains('Expected a database UUID'),
+        );
       });
     });
   });
 }
-
