@@ -70,6 +70,7 @@ class BookingViewModel extends ChangeNotifier {
 
   /// Get operating hours
   int get openHour => _availability?.openHour ?? 7;
+  int get openMinute => _availability?.openMinute ?? 0;
   int get closeHour => _availability?.closeHour ?? 22;
 
   /// Calculate total price for all selections
@@ -123,14 +124,6 @@ class BookingViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final localClosedMessage = _closedMessageFromOpeningHours();
-      if (localClosedMessage != null) {
-        _availability = null;
-        _state = BookingViewState.error;
-        _errorMessage = localClosedMessage;
-        return;
-      }
-
       _availability = await _courtRepository.fetchCourtAvailability(
         courtId: court.id,
         date: apiFormattedDate,
@@ -163,16 +156,6 @@ class BookingViewModel extends ChangeNotifier {
     }
   }
 
-  String? _closedMessageFromOpeningHours() {
-    final openingHours = court.openingHours;
-    if (openingHours == null) return null;
-
-    final hours = openingHours.getHoursForDay(_selectedDate.weekday - 1);
-    if (!_isClosedHours(hours)) return null;
-
-    return _selectedDateClosedMessage();
-  }
-
   String? _closedMessageFromError(Object error) {
     if (error is! ApiException) return null;
     if (error.statusCode != 400) return null;
@@ -183,11 +166,6 @@ class BookingViewModel extends ChangeNotifier {
 
   bool _canUseMockAvailability(Object error) {
     return error is! ApiException;
-  }
-
-  bool _isClosedHours(String? hours) {
-    final normalized = hours?.trim().toLowerCase();
-    return normalized == null || normalized.isEmpty || normalized == 'closed';
   }
 
   String _selectedDateClosedMessage() {

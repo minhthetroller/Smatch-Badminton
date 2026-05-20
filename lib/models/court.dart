@@ -225,14 +225,49 @@ class OpeningHours {
   });
 
   factory OpeningHours.fromJson(Map<String, dynamic> json) {
+    String? mon = json['mon'] as String?;
+    String? tue = json['tue'] as String?;
+    String? wed = json['wed'] as String?;
+    String? thu = json['thu'] as String?;
+    String? fri = json['fri'] as String?;
+    String? sat = json['sat'] as String?;
+    String? sun = json['sun'] as String?;
+
+    // Fallback to backend weekdays/weekends format
+    final weekdays = json['weekdays'] as Map<String, dynamic>?;
+    final weekends = json['weekends'] as Map<String, dynamic>?;
+
+    if (weekdays != null) {
+      final open = weekdays['open'] as String?;
+      final close = weekdays['close'] as String?;
+      if (open != null && close != null) {
+        final range = '$open-$close';
+        mon ??= range;
+        tue ??= range;
+        wed ??= range;
+        thu ??= range;
+        fri ??= range;
+      }
+    }
+
+    if (weekends != null) {
+      final open = weekends['open'] as String?;
+      final close = weekends['close'] as String?;
+      if (open != null && close != null) {
+        final range = '$open-$close';
+        sat ??= range;
+        sun ??= range;
+      }
+    }
+
     return OpeningHours(
-      mon: json['mon'] as String?,
-      tue: json['tue'] as String?,
-      wed: json['wed'] as String?,
-      thu: json['thu'] as String?,
-      fri: json['fri'] as String?,
-      sat: json['sat'] as String?,
-      sun: json['sun'] as String?,
+      mon: mon,
+      tue: tue,
+      wed: wed,
+      thu: thu,
+      fri: fri,
+      sat: sat,
+      sun: sun,
     );
   }
 

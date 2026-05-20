@@ -134,8 +134,12 @@ class CourtAvailability {
     return CourtAvailability(
       courtId: json['courtId'] as String,
       date: json['date'] as String,
-      openTime: json['openTime'] as String? ?? '07:00',
-      closeTime: json['closeTime'] as String? ?? '22:00',
+      openTime: json['openTime'] as String? ??
+          json['openingTime'] as String? ??
+          '07:00',
+      closeTime: json['closeTime'] as String? ??
+          json['closingTime'] as String? ??
+          '22:00',
       subCourts:
           (json['subCourts'] as List<dynamic>?)
               ?.map((e) => SubCourt.fromJson(e as Map<String, dynamic>))
@@ -160,6 +164,12 @@ class CourtAvailability {
   int get openHour {
     final parts = openTime.split(':');
     return int.tryParse(parts[0]) ?? 7;
+  }
+
+  /// Parse open time to minute
+  int get openMinute {
+    final parts = openTime.split(':');
+    return parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
   }
 
   /// Parse close time to hour

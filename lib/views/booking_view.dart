@@ -316,10 +316,12 @@ class _TimelineGridState extends State<_TimelineGrid> {
         viewModel.selectedDate.month == now.month &&
         viewModel.selectedDate.year == now.year;
 
-    // Generate all 30-minute slots
+    // Generate all 30-minute slots, aligned to actual opening minute
     final slots = <_SlotInfo>[];
+    final startMinute = viewModel.openMinute;
     for (int hour = viewModel.openHour; hour < viewModel.closeHour; hour++) {
-      for (int minute = 0; minute < 60; minute += 30) {
+      final beginMinute = (hour == viewModel.openHour) ? startMinute : 0;
+      for (int minute = beginMinute; minute < 60; minute += 30) {
         slots.add(_SlotInfo(hour: hour, minute: minute));
       }
     }
