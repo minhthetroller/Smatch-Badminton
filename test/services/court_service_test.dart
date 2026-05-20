@@ -187,9 +187,9 @@ void main() {
         verify(mockApiService.get(
           '/api/courts/nearby',
           queryParams: {
-            'latitude': '21.0285',
-            'longitude': '105.8542',
-            'radius': '5.0',
+            'lat': '21.0285',
+            'lng': '105.8542',
+            'radius': '5000', // meters
           },
         )).called(1);
       });
@@ -209,9 +209,9 @@ void main() {
         verify(mockApiService.get(
           '/api/courts/nearby',
           queryParams: {
-            'latitude': '21.0285',
-            'longitude': '105.8542',
-            'radius': '10.0',
+            'lat': '21.0285',
+            'lng': '105.8542',
+            'radius': '10000',
           },
         )).called(1);
       });
@@ -547,4 +547,3 @@ void main() {
     });
   });
 }
-
