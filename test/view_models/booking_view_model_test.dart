@@ -4,6 +4,7 @@ import 'package:mockito/mockito.dart';
 import 'package:smatch_badminton/models/availability.dart';
 import 'package:smatch_badminton/models/court.dart';
 import 'package:smatch_badminton/repositories/court_repository.dart';
+import 'package:smatch_badminton/services/api_service.dart';
 import 'package:smatch_badminton/view_models/booking_view_model.dart';
 
 import 'booking_view_model_test.mocks.dart';
@@ -106,6 +107,58 @@ void main() {
         expect(viewModel.availability, isNotNull);
         expect(viewModel.subCourts, isNotEmpty);
       });
+
+      test(
+        'should not request availability when selected weekday is closed',
+        () async {
+          final closedOnWednesdayCourt = testCourt.copyWith(
+            openingHours: const OpeningHours(
+              mon: '06:00-22:00',
+              tue: '06:00-22:00',
+              thu: '06:00-22:00',
+              fri: '06:00-22:00',
+              sat: '06:00-22:00',
+              sun: '06:00-22:00',
+            ),
+          );
+          final closedDayViewModel = BookingViewModel(
+            court: closedOnWednesdayCourt,
+            courtRepository: mockCourtRepository,
+          );
+
+          await closedDayViewModel.selectDate(DateTime(2026, 5, 20));
+
+          expect(closedDayViewModel.state, BookingViewState.error);
+          expect(closedDayViewModel.availability, isNull);
+          expect(closedDayViewModel.subCourts, isEmpty);
+          expect(closedDayViewModel.errorMessage, contains('Wednesday'));
+          verifyNever(
+            mockCourtRepository.fetchCourtAvailability(
+              courtId: anyNamed('courtId'),
+              date: anyNamed('date'),
+            ),
+          );
+        },
+      );
+
+      test(
+        'should show closed-day state for backend closed response',
+        () async {
+          when(
+            mockCourtRepository.fetchCourtAvailability(
+              courtId: anyNamed('courtId'),
+              date: anyNamed('date'),
+            ),
+          ).thenThrow(ApiException('Court is closed on wed', statusCode: 400));
+
+          await viewModel.selectDate(DateTime(2026, 5, 20));
+
+          expect(viewModel.state, BookingViewState.error);
+          expect(viewModel.availability, isNull);
+          expect(viewModel.subCourts, isEmpty);
+          expect(viewModel.errorMessage, contains('Wednesday'));
+        },
+      );
 
       test(
         'should not allow booking with synthetic mock sub-court IDs',

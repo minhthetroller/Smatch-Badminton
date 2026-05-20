@@ -5,12 +5,32 @@ import '../models/availability.dart';
 import '../models/booking.dart';
 import '../models/court.dart';
 import '../repositories/court_repository.dart';
+import '../services/api_service.dart';
 
 /// View state for the booking screen
 enum BookingViewState { initial, loading, loaded, error }
 
 /// ViewModel for the booking/timeline selector view
 class BookingViewModel extends ChangeNotifier {
+  static const List<String> _weekdayNames = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+  static const List<String> _weekdayKeys = [
+    'mon',
+    'tue',
+    'wed',
+    'thu',
+    'fri',
+    'sat',
+    'sun',
+  ];
+
   final CourtRepository _courtRepository;
   final Court court;
 
@@ -80,6 +100,17 @@ class BookingViewModel extends ChangeNotifier {
     return DateFormat('yyyy-MM-dd').format(_selectedDate);
   }
 
+  String get selectedDateWeekdayName =>
+      _weekdayNames[_selectedDate.weekday - 1];
+
+  String get selectedDateWeekdayKey => _weekdayKeys[_selectedDate.weekday - 1];
+
+  bool get isSelectedDateClosed {
+    final message = _errorMessage?.toLowerCase() ?? '';
+    return _state == BookingViewState.error &&
+        message.contains('court is closed');
+  }
+
   /// Initialize and load availability
   Future<void> initialize() async {
     await loadAvailability();
@@ -92,6 +123,14 @@ class BookingViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final localClosedMessage = _closedMessageFromOpeningHours();
+      if (localClosedMessage != null) {
+        _availability = null;
+        _state = BookingViewState.error;
+        _errorMessage = localClosedMessage;
+        return;
+      }
+
       _availability = await _courtRepository.fetchCourtAvailability(
         courtId: court.id,
         date: apiFormattedDate,
@@ -100,15 +139,59 @@ class BookingViewModel extends ChangeNotifier {
 
       // Don't reset selection when reloading - user may want to keep selections
     } catch (e) {
-      debugPrint('Failed to load availability: $e');
+      final closedMessage = _closedMessageFromError(e);
+      if (closedMessage != null) {
+        _availability = null;
+        _state = BookingViewState.error;
+        _errorMessage = closedMessage;
+        return;
+      }
+
       _state = BookingViewState.error;
       _errorMessage = e.toString();
 
-      // Generate mock data for demo purposes
-      _generateMockAvailability();
-    }
+      if (_canUseMockAvailability(e)) {
+        debugPrint('Failed to load availability: $e');
 
-    notifyListeners();
+        // Generate mock data for demo purposes when the backend cannot be reached.
+        _generateMockAvailability();
+      } else {
+        _availability = null;
+      }
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  String? _closedMessageFromOpeningHours() {
+    final openingHours = court.openingHours;
+    if (openingHours == null) return null;
+
+    final hours = openingHours.getHoursForDay(_selectedDate.weekday - 1);
+    if (!_isClosedHours(hours)) return null;
+
+    return _selectedDateClosedMessage();
+  }
+
+  String? _closedMessageFromError(Object error) {
+    if (error is! ApiException) return null;
+    if (error.statusCode != 400) return null;
+    if (!error.message.toLowerCase().contains('court is closed')) return null;
+
+    return _selectedDateClosedMessage();
+  }
+
+  bool _canUseMockAvailability(Object error) {
+    return error is! ApiException;
+  }
+
+  bool _isClosedHours(String? hours) {
+    final normalized = hours?.trim().toLowerCase();
+    return normalized == null || normalized.isEmpty || normalized == 'closed';
+  }
+
+  String _selectedDateClosedMessage() {
+    return 'Court is closed on $selectedDateWeekdayName. Please choose another date.';
   }
 
   /// Generate mock availability data when API fails

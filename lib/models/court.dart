@@ -54,6 +54,7 @@ class Court {
 
   factory Court.fromJson(Map<String, dynamic> json) {
     CourtLocation? parsedLocation;
+    final openingHoursJson = json['openingHours'] ?? json['opening_hours'];
 
     final locationJson = json['location'];
     if (locationJson is Map<String, dynamic>) {
@@ -86,8 +87,8 @@ class Court {
       details: json['details'] != null
           ? CourtDetails.fromJson(json['details'] as Map<String, dynamic>)
           : null,
-      openingHours: json['openingHours'] != null
-          ? OpeningHours.fromJson(json['openingHours'] as Map<String, dynamic>)
+      openingHours: openingHoursJson is Map<String, dynamic>
+          ? OpeningHours.fromJson(openingHoursJson)
           : null,
       location: parsedLocation,
       distance: (json['distance'] as num?)?.toDouble(),
