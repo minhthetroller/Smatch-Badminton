@@ -109,8 +109,17 @@ void main() {
       });
 
       test(
-        'should not request availability when selected weekday is closed',
+        'should rely on API for closed-day status instead of local check',
         () async {
+          when(
+            mockCourtRepository.fetchCourtAvailability(
+              courtId: anyNamed('courtId'),
+              date: anyNamed('date'),
+            ),
+          ).thenThrow(
+            ApiException('Court is closed on Wednesday', statusCode: 400),
+          );
+
           final closedOnWednesdayCourt = testCourt.copyWith(
             openingHours: const OpeningHours(
               mon: '06:00-22:00',
@@ -128,16 +137,16 @@ void main() {
 
           await closedDayViewModel.selectDate(DateTime(2026, 5, 20));
 
-          expect(closedDayViewModel.state, BookingViewState.error);
-          expect(closedDayViewModel.availability, isNull);
-          expect(closedDayViewModel.subCourts, isEmpty);
-          expect(closedDayViewModel.errorMessage, contains('Wednesday'));
-          verifyNever(
+          verify(
             mockCourtRepository.fetchCourtAvailability(
               courtId: anyNamed('courtId'),
               date: anyNamed('date'),
             ),
-          );
+          ).called(1);
+          expect(closedDayViewModel.state, BookingViewState.error);
+          expect(closedDayViewModel.availability, isNull);
+          expect(closedDayViewModel.subCourts, isEmpty);
+          expect(closedDayViewModel.errorMessage, contains('Wednesday'));
         },
       );
 
