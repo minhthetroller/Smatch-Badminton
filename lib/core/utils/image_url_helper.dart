@@ -9,10 +9,16 @@ import '../config/env.dart';
 /// - Input:  http://localhost:4566/smatch-photos/users/123/profile.jpg
 /// - Output: https://your-ngrok-url.ngrok.io/api/s3-proxy/smatch-photos/users/123/profile.jpg
 class ImageUrlHelper {
-  static final RegExp _localS3Pattern = RegExp(
-    r'^http://(localhost|127\.0\.0\.1|localstack|s3\.localhost\.localstack\.cloud):4566/',
-  );
   static const String _s3ProxyPath = '/api/s3-proxy/';
+  static const int _localStackPort = 4566;
+  static const Set<String> _localStackHosts = {
+    'localhost',
+    '127.0.0.1',
+    'localstack',
+    's3.localhost.localstack.cloud',
+  };
+  static const String _virtualHostedSuffix =
+      '.s3.localhost.localstack.cloud';
 
   /// Headers required for loading images through ngrok proxy.
   /// ngrok free tier shows an interstitial page unless this header is present.
@@ -31,22 +37,43 @@ class ImageUrlHelper {
   ///
   /// Otherwise, returns the URL unchanged.
   static String transformImageUrl(String url) {
-    final match = _localS3Pattern.firstMatch(url);
-    if (match != null) {
-      // Extract the bucket and key from the LocalStack URL.
-      final path = url.substring(match.end);
-
-      // Construct proxied URL through backend
-      // Format: https://api-base-url/api/s3-proxy/bucket/key/path
-      return '${Env.apiBaseUrl}$_s3ProxyPath$path';
+    final uri = Uri.tryParse(url);
+    if (uri == null ||
+        uri.scheme != 'http' ||
+        uri.port != _localStackPort ||
+        !_isLocalStackHost(uri.host)) {
+      return url;
     }
 
-    // If already using proxy path or external URL, return as-is
-    return url;
+    final path = _localStackProxyPath(uri);
+    if (path.isEmpty) return url;
+
+    final baseUrl = Env.apiBaseUrl.replaceFirst(RegExp(r'/$'), '');
+    return '$baseUrl$_s3ProxyPath$path';
   }
 
   /// Transform a list of image URLs
   static List<String> transformImageUrls(List<String> urls) {
     return urls.map((url) => transformImageUrl(url)).toList();
+  }
+
+  static bool _isLocalStackHost(String host) {
+    return _localStackHosts.contains(host) ||
+        host.endsWith(_virtualHostedSuffix);
+  }
+
+  static String _localStackProxyPath(Uri uri) {
+    final path = uri.pathSegments.join('/');
+
+    if (uri.host.endsWith(_virtualHostedSuffix) &&
+        uri.host != 's3.localhost.localstack.cloud') {
+      final bucket = uri.host.substring(
+        0,
+        uri.host.length - _virtualHostedSuffix.length,
+      );
+      return [bucket, if (path.isNotEmpty) path].join('/');
+    }
+
+    return path;
   }
 }

@@ -12,6 +12,7 @@ void main() {
           'http://127.0.0.1:4566/smatch-photos/matches/1.jpg',
           'http://localstack:4566/smatch-photos/matches/1.jpg',
           'http://s3.localhost.localstack.cloud:4566/smatch-photos/matches/1.jpg',
+          'http://smatch-photos.s3.localhost.localstack.cloud:4566/matches/1.jpg',
         ];
 
         for (final url in urls) {
@@ -22,6 +23,18 @@ void main() {
         }
       },
     );
+
+    test('keeps malformed and non-LocalStack URLs unchanged', () {
+      final urls = [
+        'not a url',
+        'https://localhost:4566/smatch-photos/matches/1.jpg',
+        'http://localhost:3000/smatch-photos/matches/1.jpg',
+      ];
+
+      for (final url in urls) {
+        expect(ImageUrlHelper.transformImageUrl(url), url);
+      }
+    });
 
     test('keeps external and already proxied URLs unchanged', () {
       final urls = [
