@@ -34,7 +34,7 @@ class BookingRequest {
 /// ViewModel for the payment view
 class PaymentViewModel extends ChangeNotifier {
   final PaymentService _paymentService;
-  
+
   // State
   PaymentViewState _state = PaymentViewState.initial;
   String? _errorMessage;
@@ -42,26 +42,26 @@ class PaymentViewModel extends ChangeNotifier {
   List<Booking> _bookings = []; // All bookings for multiple courts
   CreatePaymentResponse? _paymentResponse;
   PaymentNotification? _lastNotification;
-  
+
   // Countdown timer
   Timer? _countdownTimer;
   Duration _remainingTime = Duration.zero;
-  
+
   // WebSocket subscription
   StreamSubscription<PaymentNotification>? _notificationSubscription;
-  
+
   // Polling timer (fallback for WebSocket issues)
   Timer? _pollingTimer;
-  
+
   // Store booking requests for retry
   List<BookingRequest>? _pendingBookingRequests;
   String? _pendingGuestName;
   String? _pendingGuestPhone;
   String? _pendingGuestEmail;
   String? _pendingDate;
-  
+
   PaymentViewModel({PaymentService? paymentService})
-      : _paymentService = paymentService ?? PaymentService();
+    : _paymentService = paymentService ?? PaymentService();
 
   // Getters
   PaymentViewState get state => _state;
@@ -72,12 +72,12 @@ class PaymentViewModel extends ChangeNotifier {
   PaymentNotification? get lastNotification => _lastNotification;
   Duration get remainingTime => _remainingTime;
   Payment? get payment => _paymentResponse?.payment;
-  
+
   /// Get QR code as bytes for Image.memory()
   Uint8List? get qrCodeBytes {
     final rawBase64 = _paymentResponse?.qrCode.rawBase64;
     if (rawBase64 == null) return null;
-    
+
     try {
       return base64Decode(rawBase64);
     } catch (e) {
@@ -85,14 +85,14 @@ class PaymentViewModel extends ChangeNotifier {
       return null;
     }
   }
-  
+
   /// Get formatted remaining time (mm:ss)
   String get formattedRemainingTime {
     final minutes = _remainingTime.inMinutes;
     final seconds = _remainingTime.inSeconds % 60;
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
-  
+
   /// Check if payment is still active (not expired/failed/success)
   bool get isPaymentActive {
     return _state == PaymentViewState.waitingForPayment;
@@ -109,6 +109,14 @@ class PaymentViewModel extends ChangeNotifier {
     required String endTime,
     String? notes,
   }) async {
+    final validationError = CreateBookingRequest.validateSubCourtId(subCourtId);
+    if (validationError != null) {
+      _state = PaymentViewState.error;
+      _errorMessage = validationError;
+      notifyListeners();
+      return;
+    }
+
     _state = PaymentViewState.creatingBooking;
     _errorMessage = null;
     notifyListeners();
@@ -136,7 +144,9 @@ class PaymentViewModel extends ChangeNotifier {
 
       debugPrint('PaymentViewModel: Creating payment...');
       _paymentResponse = await _paymentService.createPayment(_booking!.id);
-      debugPrint('PaymentViewModel: Payment created: ${_paymentResponse!.payment.id}');
+      debugPrint(
+        'PaymentViewModel: Payment created: ${_paymentResponse!.payment.id}',
+      );
 
       // Step 3: Connect to WebSocket for real-time updates
       _state = PaymentViewState.waitingForPayment;
@@ -145,7 +155,6 @@ class PaymentViewModel extends ChangeNotifier {
       await _connectWebSocket();
       _startCountdown();
       _startPolling(); // Fallback polling
-
     } catch (e) {
       debugPrint('PaymentViewModel: Error: $e');
       _state = PaymentViewState.error;
@@ -167,6 +176,14 @@ class PaymentViewModel extends ChangeNotifier {
     if (bookingRequests.isEmpty) {
       _state = PaymentViewState.error;
       _errorMessage = 'No courts selected for booking.';
+      notifyListeners();
+      return;
+    }
+
+    final validationError = _validateBookingRequests(bookingRequests);
+    if (validationError != null) {
+      _state = PaymentViewState.error;
+      _errorMessage = validationError;
       notifyListeners();
       return;
     }
@@ -197,7 +214,9 @@ class PaymentViewModel extends ChangeNotifier {
           notes: notes,
         );
 
-        debugPrint('PaymentViewModel: Creating booking for court ${request.subCourtId}...');
+        debugPrint(
+          'PaymentViewModel: Creating booking for court ${request.subCourtId}...',
+        );
         final booking = await _paymentService.createBooking(bookingRequest);
         _bookings.add(booking);
         debugPrint('PaymentViewModel: Booking created: ${booking.id}');
@@ -211,9 +230,13 @@ class PaymentViewModel extends ChangeNotifier {
       _state = PaymentViewState.creatingPayment;
       notifyListeners();
 
-      debugPrint('PaymentViewModel: Creating payment for booking ${_booking!.id}...');
+      debugPrint(
+        'PaymentViewModel: Creating payment for booking ${_booking!.id}...',
+      );
       _paymentResponse = await _paymentService.createPayment(_booking!.id);
-      debugPrint('PaymentViewModel: Payment created: ${_paymentResponse!.payment.id}');
+      debugPrint(
+        'PaymentViewModel: Payment created: ${_paymentResponse!.payment.id}',
+      );
 
       // Step 3: Connect to WebSocket for real-time updates
       _state = PaymentViewState.waitingForPayment;
@@ -222,13 +245,22 @@ class PaymentViewModel extends ChangeNotifier {
       await _connectWebSocket();
       _startCountdown();
       _startPolling(); // Fallback polling
-
     } catch (e) {
       debugPrint('PaymentViewModel: Error: $e');
       _state = PaymentViewState.error;
       _errorMessage = e.toString();
       notifyListeners();
     }
+  }
+
+  String? _validateBookingRequests(List<BookingRequest> bookingRequests) {
+    for (final request in bookingRequests) {
+      final validationError = CreateBookingRequest.validateSubCourtId(
+        request.subCourtId,
+      );
+      if (validationError != null) return validationError;
+    }
+    return null;
   }
 
   /// Connect to WebSocket and listen for payment updates
@@ -294,7 +326,7 @@ class PaymentViewModel extends ChangeNotifier {
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _updateRemainingTime(expireAt);
-      
+
       if (_remainingTime.isNegative || _remainingTime == Duration.zero) {
         _handlePaymentExpired();
       }
@@ -305,11 +337,11 @@ class PaymentViewModel extends ChangeNotifier {
   void _updateRemainingTime(DateTime expireAt) {
     final now = DateTime.now();
     _remainingTime = expireAt.difference(now);
-    
+
     if (_remainingTime.isNegative) {
       _remainingTime = Duration.zero;
     }
-    
+
     notifyListeners();
   }
 
@@ -359,9 +391,9 @@ class PaymentViewModel extends ChangeNotifier {
   /// Retry payment (create new bookings and payment)
   Future<void> retryPayment() async {
     // If we have pending requests, recreate all bookings
-    if (_pendingBookingRequests != null && 
-        _pendingGuestName != null && 
-        _pendingGuestPhone != null && 
+    if (_pendingBookingRequests != null &&
+        _pendingGuestName != null &&
+        _pendingGuestPhone != null &&
         _pendingDate != null) {
       await initializePaymentForMultipleCourts(
         bookingRequests: _pendingBookingRequests!,
@@ -387,11 +419,10 @@ class PaymentViewModel extends ChangeNotifier {
     try {
       _paymentResponse = await _paymentService.createPayment(_booking!.id);
       _state = PaymentViewState.waitingForPayment;
-      
+
       await _connectWebSocket();
       _startCountdown();
       _startPolling();
-      
     } catch (e) {
       debugPrint('PaymentViewModel: Retry error: $e');
       _state = PaymentViewState.error;
@@ -430,4 +461,3 @@ class PaymentViewModel extends ChangeNotifier {
     super.dispose();
   }
 }
-

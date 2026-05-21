@@ -689,9 +689,25 @@ class _CourtBottomSheetState extends State<CourtBottomSheet> {
   }
 
   bool _isCurrentlyOpen() {
+    final todayHours = widget.court.openingHours?.todayHours;
+    if (todayHours == null) return false;
+    final parts = todayHours.split('-');
+    if (parts.length != 2) return false;
+    final open = _parseTimeToMinutes(parts[0].trim());
+    final close = _parseTimeToMinutes(parts[1].trim());
+    if (open == null || close == null) return false;
     final now = DateTime.now();
-    final hour = now.hour;
-    return hour >= 6 && hour < 22;
+    final currentMinutes = now.hour * 60 + now.minute;
+    return currentMinutes >= open && currentMinutes < close;
+  }
+
+  int? _parseTimeToMinutes(String time) {
+    final parts = time.split(':');
+    if (parts.length != 2) return null;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return null;
+    return h * 60 + m;
   }
 
   Future<void> _makePhoneCall() async {

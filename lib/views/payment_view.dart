@@ -39,9 +39,8 @@ class PaymentView extends StatelessWidget {
   Widget build(BuildContext context) {
     // Create booking requests for ALL selected courts, not just the first one
     final bookingRequests = summaries.map((summary) {
-      final subCourt = subCourts[summary.subCourtIndex];
       return BookingRequest(
-        subCourtId: subCourt.id,
+        subCourtId: _resolveSubCourtId(summary),
         startTime: summary.timeRanges.first.startTimeString,
         endTime: summary.timeRanges.last.endTimeString,
       );
@@ -65,6 +64,15 @@ class PaymentView extends StatelessWidget {
         guestPhone: guestPhone,
       ),
     );
+  }
+
+  String _resolveSubCourtId(CourtBookingSummary summary) {
+    if (summary.subCourtId.isNotEmpty) return summary.subCourtId;
+    if (summary.subCourtIndex >= 0 &&
+        summary.subCourtIndex < subCourts.length) {
+      return subCourts[summary.subCourtIndex].id;
+    }
+    return '';
   }
 }
 
@@ -97,7 +105,9 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
   @override
   Widget build(BuildContext context) {
     // Only listen to state changes for navigation
-    final state = context.select<PaymentViewModel, PaymentViewState>((vm) => vm.state);
+    final state = context.select<PaymentViewModel, PaymentViewState>(
+      (vm) => vm.state,
+    );
     final viewModel = context.read<PaymentViewModel>();
 
     // Navigate to success screen when payment is successful
@@ -162,10 +172,7 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              'Stay',
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
+            child: Text('Stay', style: TextStyle(color: Colors.grey.shade600)),
           ),
           TextButton(
             onPressed: () {
@@ -187,22 +194,22 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
       case PaymentViewState.initial:
       case PaymentViewState.creatingBooking:
         return _buildLoadingState('Creating your booking...');
-      
+
       case PaymentViewState.creatingPayment:
         return _buildLoadingState('Generating payment QR code...');
-      
+
       case PaymentViewState.waitingForPayment:
         return _buildPaymentQRState(context);
-      
+
       case PaymentViewState.paymentSuccess:
         return _buildLoadingState('Payment successful! Redirecting...');
-      
+
       case PaymentViewState.paymentFailed:
         return _buildErrorState(context, isRetryable: true);
-      
+
       case PaymentViewState.paymentExpired:
         return _buildExpiredState(context);
-      
+
       case PaymentViewState.error:
         return _buildErrorState(context, isRetryable: false);
     }
@@ -230,10 +237,7 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
           const SizedBox(height: 24),
           Text(
             message,
-            style: const TextStyle(
-              fontSize: 16,
-              color: AppTheme.textSecondary,
-            ),
+            style: const TextStyle(fontSize: 16, color: AppTheme.textSecondary),
           ),
         ],
       ),
@@ -297,11 +301,7 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
         children: [
           const Row(
             children: [
-              Icon(
-                Icons.receipt_outlined,
-                color: Color(0xFF2E7D32),
-                size: 20,
-              ),
+              Icon(Icons.receipt_outlined, color: Color(0xFF2E7D32), size: 20),
               SizedBox(width: 8),
               Text(
                 'Order Summary',
@@ -372,10 +372,7 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
       children: [
         Text(
           label,
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.grey.shade600,
-          ),
+          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
         ),
         Flexible(
           child: Text(
@@ -409,11 +406,7 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
         children: [
           const Row(
             children: [
-              Icon(
-                Icons.info_outline,
-                color: Color(0xFF008FE5),
-                size: 20,
-              ),
+              Icon(Icons.info_outline, color: Color(0xFF008FE5), size: 20),
               SizedBox(width: 8),
               Text(
                 'How to pay',
@@ -464,10 +457,7 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
         Expanded(
           child: Text(
             text,
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.grey.shade700,
-            ),
+            style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
           ),
         ),
       ],
@@ -477,17 +467,10 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
   Widget _buildRefreshButton(BuildContext context) {
     return TextButton.icon(
       onPressed: () => context.read<PaymentViewModel>().refreshPaymentStatus(),
-      icon: Icon(
-        Icons.refresh,
-        color: Colors.grey.shade600,
-        size: 18,
-      ),
+      icon: Icon(Icons.refresh, color: Colors.grey.shade600, size: 18),
       label: Text(
         'Already paid? Tap to refresh',
-        style: TextStyle(
-          color: Colors.grey.shade600,
-          fontSize: 13,
-        ),
+        style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
       ),
     );
   }
@@ -537,7 +520,10 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2E7D32),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 14,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -545,10 +531,7 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
               icon: const Icon(Icons.refresh),
               label: const Text(
                 'Try Again',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ),
             const SizedBox(height: 16),
@@ -567,7 +550,7 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
 
   Widget _buildErrorState(BuildContext context, {required bool isRetryable}) {
     final viewModel = context.read<PaymentViewModel>();
-    
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -613,7 +596,10 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF2E7D32),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 14,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -621,10 +607,7 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
                 icon: const Icon(Icons.refresh),
                 label: const Text(
                   'Try Again',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ),
             const SizedBox(height: 16),
@@ -655,9 +638,9 @@ class _TimerCard extends StatelessWidget {
     final formattedTime = context.select<PaymentViewModel, String>(
       (vm) => vm.formattedRemainingTime,
     );
-    
+
     final isLowTime = remainingTime.inMinutes < 2;
-    
+
     return RepaintBoundary(
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -701,10 +684,7 @@ class _TimerCard extends StatelessWidget {
                 children: [
                   const Text(
                     'Time remaining to pay',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 13,
-                    ),
+                    style: TextStyle(color: Colors.white70, fontSize: 13),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -721,7 +701,10 @@ class _TimerCard extends StatelessWidget {
             ),
             if (isLowTime)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),
@@ -827,7 +810,8 @@ class _QRCodeCardState extends State<_QRCodeCard> {
                       child: Image.memory(
                         _qrBytes!,
                         fit: BoxFit.contain,
-                        gaplessPlayback: true, // Prevents flashing during rebuilds
+                        gaplessPlayback:
+                            true, // Prevents flashing during rebuilds
                       ),
                     )
                   : const Center(
@@ -858,10 +842,7 @@ class _QRCodeCardState extends State<_QRCodeCard> {
               ),
               child: const Text(
                 'Scan QR code with ZaloPay app',
-                style: TextStyle(
-                  color: AppTheme.textSecondary,
-                  fontSize: 13,
-                ),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
               ),
             ),
           ],

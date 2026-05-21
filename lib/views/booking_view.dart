@@ -95,19 +95,22 @@ class _BookingHeader extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.calendar_today,
-                      size: 16, color: Colors.grey.shade600),
+                  Icon(
+                    Icons.calendar_today,
+                    size: 16,
+                    color: Colors.grey.shade600,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     viewModel.formattedDate,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade800,
-                    ),
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade800),
                   ),
                   const SizedBox(width: 4),
-                  Icon(Icons.arrow_drop_down,
-                      size: 20, color: Colors.grey.shade600),
+                  Icon(
+                    Icons.arrow_drop_down,
+                    size: 20,
+                    color: Colors.grey.shade600,
+                  ),
                 ],
               ),
             ),
@@ -118,7 +121,9 @@ class _BookingHeader extends StatelessWidget {
   }
 
   Future<void> _showDatePicker(
-      BuildContext context, BookingViewModel viewModel) async {
+    BuildContext context,
+    BookingViewModel viewModel,
+  ) async {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
@@ -162,18 +167,17 @@ class _SubCourtTabs extends StatelessWidget {
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Colors.grey.shade200),
-        ),
+        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
       ),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: subCourts.length,
         itemBuilder: (context, index) {
           final isViewing = viewModel.selectedSubCourtIndex == index;
-          final hasSelections =
-              viewModel.selection.slotsByCourtIndex.containsKey(index);
-          final selectionCount = viewModel.selection.slotsByCourtIndex[index]?.length ?? 0;
+          final hasSelections = viewModel.selection.slotsByCourtIndex
+              .containsKey(index);
+          final selectionCount =
+              viewModel.selection.slotsByCourtIndex[index]?.length ?? 0;
 
           return GestureDetector(
             onTap: () => viewModel.selectSubCourt(index),
@@ -183,8 +187,9 @@ class _SubCourtTabs extends StatelessWidget {
               decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(
-                    color:
-                        isViewing ? const Color(0xFF2E7D32) : Colors.transparent,
+                    color: isViewing
+                        ? const Color(0xFF2E7D32)
+                        : Colors.transparent,
                     width: 3,
                   ),
                 ),
@@ -196,7 +201,9 @@ class _SubCourtTabs extends StatelessWidget {
                     subCourts[index].name,
                     style: TextStyle(
                       fontSize: 15,
-                      fontWeight: isViewing ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight: isViewing
+                          ? FontWeight.w600
+                          : FontWeight.normal,
                       color: isViewing
                           ? const Color(0xFF2E7D32)
                           : Colors.grey.shade600,
@@ -206,7 +213,9 @@ class _SubCourtTabs extends StatelessWidget {
                     const SizedBox(width: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFF2E7D32),
                         borderRadius: BorderRadius.circular(10),
@@ -257,8 +266,10 @@ class _TimelineGridState extends State<_TimelineGrid> {
 
     // Each 30-min slot is 50 pixels
     const slotHeight = 50.0;
-    final targetHour =
-        currentHour.clamp(viewModel.openHour, viewModel.closeHour - 1);
+    final targetHour = currentHour.clamp(
+      viewModel.openHour,
+      viewModel.closeHour - 1,
+    );
     final scrollPosition = (targetHour - viewModel.openHour) * 2 * slotHeight;
 
     if (_scrollController.hasClients) {
@@ -282,10 +293,12 @@ class _TimelineGridState extends State<_TimelineGrid> {
 
     if (viewModel.state == BookingViewState.loading) {
       return const Center(
-        child: CircularProgressIndicator(
-          color: Color(0xFF2E7D32),
-        ),
+        child: CircularProgressIndicator(color: Color(0xFF2E7D32)),
       );
+    }
+
+    if (viewModel.state == BookingViewState.error) {
+      return _AvailabilityErrorState(viewModel: viewModel);
     }
 
     return SingleChildScrollView(
@@ -298,14 +311,17 @@ class _TimelineGridState extends State<_TimelineGrid> {
     const slotHeight = 50.0;
     const timeColumnWidth = 55.0;
     final now = DateTime.now();
-    final isToday = viewModel.selectedDate.day == now.day &&
+    final isToday =
+        viewModel.selectedDate.day == now.day &&
         viewModel.selectedDate.month == now.month &&
         viewModel.selectedDate.year == now.year;
 
-    // Generate all 30-minute slots
+    // Generate all 30-minute slots, aligned to actual opening minute
     final slots = <_SlotInfo>[];
+    final startMinute = viewModel.openMinute;
     for (int hour = viewModel.openHour; hour < viewModel.closeHour; hour++) {
-      for (int minute = 0; minute < 60; minute += 30) {
+      final beginMinute = (hour == viewModel.openHour) ? startMinute : 0;
+      for (int minute = beginMinute; minute < 60; minute += 30) {
         slots.add(_SlotInfo(hour: hour, minute: minute));
       }
     }
@@ -334,6 +350,46 @@ class _TimelineGridState extends State<_TimelineGrid> {
             timeColumnWidth: timeColumnWidth,
           ),
       ],
+    );
+  }
+}
+
+class _AvailabilityErrorState extends StatelessWidget {
+  final BookingViewModel viewModel;
+
+  const _AvailabilityErrorState({required this.viewModel});
+
+  @override
+  Widget build(BuildContext context) {
+    final canRetry = !viewModel.isSelectedDateClosed;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.event_busy, size: 40, color: Colors.grey.shade500),
+            const SizedBox(height: 12),
+            Text(
+              viewModel.errorMessage ?? 'Unable to load availability.',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            if (canRetry) ...[
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: viewModel.loadAvailability,
+                child: const Text('Retry'),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -381,19 +437,19 @@ class _TimeSlotRow extends StatelessWidget {
           // Time label
           SizedBox(
             width: timeColumnWidth,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 8, top: 0),
-                child: Text(
-                  timeStr,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: isHourStart ? FontWeight.w500 : FontWeight.normal,
-                    color: isPassed ? Colors.grey.shade400 : Colors.grey.shade700,
-                  ),
-                  textAlign: TextAlign.right,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8, top: 0),
+              child: Text(
+                timeStr,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isHourStart ? FontWeight.w500 : FontWeight.normal,
+                  color: isPassed ? Colors.grey.shade400 : Colors.grey.shade700,
                 ),
+                textAlign: TextAlign.right,
               ),
             ),
+          ),
 
           // Time slot area
           Expanded(
@@ -401,7 +457,11 @@ class _TimeSlotRow extends StatelessWidget {
               onTap: isDisabled
                   ? null
                   : () {
-                      viewModel.toggleSlotSelection(subCourtIndex, hour, minute);
+                      viewModel.toggleSlotSelection(
+                        subCourtIndex,
+                        hour,
+                        minute,
+                      );
                     },
               child: Container(
                 decoration: BoxDecoration(
@@ -424,7 +484,12 @@ class _TimeSlotRow extends StatelessWidget {
     );
   }
 
-  Widget _buildSlotContent(bool isPassed, bool isBooked, bool isSelected, dynamic slot) {
+  Widget _buildSlotContent(
+    bool isPassed,
+    bool isBooked,
+    bool isSelected,
+    dynamic slot,
+  ) {
     // Passed time slot - disabled
     if (isPassed) {
       return Container(
@@ -434,11 +499,7 @@ class _TimeSlotRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
         ),
         child: Center(
-          child: Icon(
-            Icons.block,
-            color: Colors.grey.shade400,
-            size: 16,
-          ),
+          child: Icon(Icons.block, color: Colors.grey.shade400, size: 16),
         ),
       );
     }
@@ -474,11 +535,7 @@ class _TimeSlotRow extends StatelessWidget {
           border: Border.all(color: const Color(0xFF4CAF50)),
         ),
         child: const Center(
-          child: Icon(
-            Icons.check,
-            color: Color(0xFF2E7D32),
-            size: 20,
-          ),
+          child: Icon(Icons.check, color: Color(0xFF2E7D32), size: 20),
         ),
       );
     }
@@ -547,12 +604,7 @@ class _CurrentTimeIndicator extends StatelessWidget {
             ),
           ),
           // Red line
-          Expanded(
-            child: Container(
-              height: 2,
-              color: const Color(0xFFE53935),
-            ),
-          ),
+          Expanded(child: Container(height: 2, color: const Color(0xFFE53935))),
         ],
       ),
     );
@@ -603,9 +655,13 @@ class _BottomBookingBar extends StatelessWidget {
                           const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2E7D32).withValues(alpha: 0.1),
+                              color: const Color(
+                                0xFF2E7D32,
+                              ).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -648,7 +704,9 @@ class _BottomBookingBar extends StatelessWidget {
                             const SizedBox(width: 8),
                             Flexible(
                               child: Text(
-                                BookingViewModel.formatPriceVND(viewModel.totalPrice),
+                                BookingViewModel.formatPriceVND(
+                                  viewModel.totalPrice,
+                                ),
                                 style: const TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
@@ -663,10 +721,7 @@ class _BottomBookingBar extends StatelessWidget {
                   )
                 : Text(
                     'Chọn khung giờ (tối thiểu 1 giờ)',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade600,
-                    ),
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
                   ),
           ),
 
@@ -678,8 +733,10 @@ class _BottomBookingBar extends StatelessWidget {
               onPressed: () => viewModel.clearSelection(),
               style: TextButton.styleFrom(
                 foregroundColor: Colors.grey.shade600,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
               ),
               child: const Text('Clear'),
             ),
@@ -717,7 +774,9 @@ class _BottomBookingBar extends StatelessWidget {
                 Icon(
                   Icons.arrow_forward,
                   size: 16,
-                  color: viewModel.canBook ? Colors.white : Colors.grey.shade500,
+                  color: viewModel.canBook
+                      ? Colors.white
+                      : Colors.grey.shade500,
                 ),
               ],
             ),
@@ -727,7 +786,10 @@ class _BottomBookingBar extends StatelessWidget {
     );
   }
 
-  void _navigateToConfirmation(BuildContext context, BookingViewModel viewModel) {
+  void _navigateToConfirmation(
+    BuildContext context,
+    BookingViewModel viewModel,
+  ) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => BookingConfirmationView(

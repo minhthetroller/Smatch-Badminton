@@ -97,6 +97,10 @@ enum BookingStatus {
 
 /// Request model for creating a booking
 class CreateBookingRequest {
+  static final RegExp _uuidPattern = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
   final String subCourtId;
   final String guestName;
   final String guestPhone;
@@ -117,9 +121,20 @@ class CreateBookingRequest {
     this.notes,
   });
 
+  static bool isValidSubCourtId(String value) {
+    return _uuidPattern.hasMatch(value.trim());
+  }
+
+  static String? validateSubCourtId(String value) {
+    if (isValidSubCourtId(value)) return null;
+    return 'Invalid subCourtId "$value". Expected a database UUID for the selected sub-court.';
+  }
+
+  bool get hasValidSubCourtId => isValidSubCourtId(subCourtId);
+
   Map<String, dynamic> toJson() {
     return {
-      'subCourtId': subCourtId,
+      'subCourtId': subCourtId.trim(),
       'guestName': guestName,
       'guestPhone': guestPhone,
       if (guestEmail != null) 'guestEmail': guestEmail,
@@ -130,4 +145,3 @@ class CreateBookingRequest {
     };
   }
 }
-
