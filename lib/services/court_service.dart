@@ -55,13 +55,18 @@ class CourtService {
     required double latitude,
     required double longitude,
     double radius = 5,
+    bool radiusIsMeters = false,
   }) async {
+    // Backend nearby endpoint expects meters, while app callers typically
+    // provide kilometers (e.g., 5 => 5km).
+    final radiusMeters = radiusIsMeters ? radius : radius * 1000;
+
     final response = await _apiService.get(
       ApiConstants.nearbyCourts,
       queryParams: {
-        'latitude': latitude.toString(),
-        'longitude': longitude.toString(),
-        'radius': radius.toString(),
+        'lat': latitude.toString(),
+        'lng': longitude.toString(),
+        'radius': radiusMeters.toStringAsFixed(0),
       },
     );
 
@@ -147,16 +152,15 @@ class CourtService {
       },
     );
 
-    return ApiResponse.fromJson(
-      response,
-      (data) {
-        final suggestions = data['suggestions'] as List?;
-        if (suggestions == null) return <SearchSuggestion>[];
-        return suggestions
-            .map((item) => SearchSuggestion.fromJson(item as Map<String, dynamic>))
-            .toList();
-      },
-    );
+    return ApiResponse.fromJson(response, (data) {
+      final suggestions = data['suggestions'] as List?;
+      if (suggestions == null) return <SearchSuggestion>[];
+      return suggestions
+          .map(
+            (item) => SearchSuggestion.fromJson(item as Map<String, dynamic>),
+          )
+          .toList();
+    });
   }
 
   /// Dispose service

@@ -40,15 +40,25 @@ class TimeSlot {
   DateTime get startDateTime {
     final parts = startTime.split(':');
     final now = DateTime.now();
-    return DateTime(now.year, now.month, now.day, 
-        int.parse(parts[0]), int.parse(parts[1]));
+    return DateTime(
+      now.year,
+      now.month,
+      now.day,
+      int.parse(parts[0]),
+      int.parse(parts[1]),
+    );
   }
 
   DateTime get endDateTime {
     final parts = endTime.split(':');
     final now = DateTime.now();
-    return DateTime(now.year, now.month, now.day, 
-        int.parse(parts[0]), int.parse(parts[1]));
+    return DateTime(
+      now.year,
+      now.month,
+      now.day,
+      int.parse(parts[0]),
+      int.parse(parts[1]),
+    );
   }
 
   /// Get hour from start time
@@ -76,16 +86,17 @@ class SubCourt {
 
   factory SubCourt.fromJson(Map<String, dynamic> json) {
     // API returns 'slots' for time slot data
-    final slotsData = json['slots'] as List<dynamic>? ?? 
-                      json['timeSlots'] as List<dynamic>? ?? 
-                      [];
+    final slotsData =
+        json['slots'] as List<dynamic>? ??
+        json['timeSlots'] as List<dynamic>? ??
+        [];
     return SubCourt(
       id: json['id'] as String,
       name: json['name'] as String,
       courtNumber: json['courtNumber'] as int? ?? 1,
       timeSlots: slotsData
-              .map((e) => TimeSlot.fromJson(e as Map<String, dynamic>))
-              .toList(),
+          .map((e) => TimeSlot.fromJson(e as Map<String, dynamic>))
+          .toList(),
       pricePerHour: (json['pricePerHour'] as num?)?.toDouble(),
     );
   }
@@ -123,9 +134,14 @@ class CourtAvailability {
     return CourtAvailability(
       courtId: json['courtId'] as String,
       date: json['date'] as String,
-      openTime: json['openTime'] as String? ?? '07:00',
-      closeTime: json['closeTime'] as String? ?? '22:00',
-      subCourts: (json['subCourts'] as List<dynamic>?)
+      openTime: json['openTime'] as String? ??
+          json['openingTime'] as String? ??
+          '07:00',
+      closeTime: json['closeTime'] as String? ??
+          json['closingTime'] as String? ??
+          '22:00',
+      subCourts:
+          (json['subCourts'] as List<dynamic>?)
               ?.map((e) => SubCourt.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
@@ -150,6 +166,12 @@ class CourtAvailability {
     return int.tryParse(parts[0]) ?? 7;
   }
 
+  /// Parse open time to minute
+  int get openMinute {
+    final parts = openTime.split(':');
+    return parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+  }
+
   /// Parse close time to hour
   int get closeHour {
     final parts = closeTime.split(':');
@@ -160,6 +182,7 @@ class CourtAvailability {
 /// Model representing a single selected time slot for a specific court
 class SelectedSlot {
   final int subCourtIndex;
+  final String subCourtId;
   final String subCourtName;
   final int hour;
   final int minute;
@@ -167,6 +190,7 @@ class SelectedSlot {
 
   const SelectedSlot({
     required this.subCourtIndex,
+    this.subCourtId = '',
     required this.subCourtName,
     required this.hour,
     required this.minute,
@@ -177,7 +201,7 @@ class SelectedSlot {
   String get key => '$subCourtIndex-$hour-$minute';
 
   /// Time string (e.g., "07:00")
-  String get timeString => 
+  String get timeString =>
       '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
 
   /// End time string (30 min later)
@@ -201,6 +225,7 @@ class SelectedSlot {
 
   SelectedSlot copyWith({
     int? subCourtIndex,
+    String? subCourtId,
     String? subCourtName,
     int? hour,
     int? minute,
@@ -208,6 +233,7 @@ class SelectedSlot {
   }) {
     return SelectedSlot(
       subCourtIndex: subCourtIndex ?? this.subCourtIndex,
+      subCourtId: subCourtId ?? this.subCourtId,
       subCourtName: subCourtName ?? this.subCourtName,
       hour: hour ?? this.hour,
       minute: minute ?? this.minute,
@@ -224,10 +250,12 @@ class BookingSelection {
 
   /// Check if a specific slot is selected
   bool isSlotSelected(int subCourtIndex, int hour, int minute) {
-    return slots.any((s) =>
-        s.subCourtIndex == subCourtIndex &&
-        s.hour == hour &&
-        s.minute == minute);
+    return slots.any(
+      (s) =>
+          s.subCourtIndex == subCourtIndex &&
+          s.hour == hour &&
+          s.minute == minute,
+    );
   }
 
   /// Add a slot to selection
@@ -242,10 +270,12 @@ class BookingSelection {
   BookingSelection removeSlot(int subCourtIndex, int hour, int minute) {
     return BookingSelection(
       slots: slots
-          .where((s) =>
-              !(s.subCourtIndex == subCourtIndex &&
-                  s.hour == hour &&
-                  s.minute == minute))
+          .where(
+            (s) =>
+                !(s.subCourtIndex == subCourtIndex &&
+                    s.hour == hour &&
+                    s.minute == minute),
+          )
           .toList(),
     );
   }
@@ -272,7 +302,7 @@ class BookingSelection {
     final minutes = totalDurationMinutes;
     final hours = minutes ~/ 60;
     final mins = minutes % 60;
-    
+
     if (hours == 0) return '${mins}m';
     if (mins == 0) return '${hours}h';
     return '${hours}h ${mins}m';
@@ -318,7 +348,8 @@ class BookingSelection {
           );
         } else {
           // Check if this slot is consecutive
-          final expectedMinutes = currentRange.endHour * 60 + currentRange.endMinute;
+          final expectedMinutes =
+              currentRange.endHour * 60 + currentRange.endMinute;
           final slotMinutes = slot.hour * 60 + slot.minute;
 
           if (slotMinutes == expectedMinutes) {
@@ -348,13 +379,16 @@ class BookingSelection {
         ranges.add(currentRange);
       }
 
-      result.add(CourtBookingSummary(
-        subCourtIndex: entry.key,
-        subCourtName: courtSlots.first.subCourtName,
-        timeRanges: ranges,
-        totalSlots: courtSlots.length,
-        totalPrice: courtSlots.fold(0.0, (sum, s) => sum + s.price),
-      ));
+      result.add(
+        CourtBookingSummary(
+          subCourtIndex: entry.key,
+          subCourtId: courtSlots.first.subCourtId,
+          subCourtName: courtSlots.first.subCourtName,
+          timeRanges: ranges,
+          totalSlots: courtSlots.length,
+          totalPrice: courtSlots.fold(0.0, (sum, s) => sum + s.price),
+        ),
+      );
     }
 
     return result;
@@ -402,6 +436,7 @@ class TimeRange {
 /// Summary of bookings for a single court
 class CourtBookingSummary {
   final int subCourtIndex;
+  final String subCourtId;
   final String subCourtName;
   final List<TimeRange> timeRanges;
   final int totalSlots;
@@ -409,6 +444,7 @@ class CourtBookingSummary {
 
   const CourtBookingSummary({
     required this.subCourtIndex,
+    this.subCourtId = '',
     required this.subCourtName,
     required this.timeRanges,
     required this.totalSlots,
@@ -421,7 +457,7 @@ class CourtBookingSummary {
     final minutes = totalDurationMinutes;
     final hours = minutes ~/ 60;
     final mins = minutes % 60;
-    
+
     if (hours == 0) return '${mins}m';
     if (mins == 0) return '${hours}h';
     return '${hours}h ${mins}m';

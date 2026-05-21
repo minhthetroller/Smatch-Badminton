@@ -53,6 +53,24 @@ class Court {
   }
 
   factory Court.fromJson(Map<String, dynamic> json) {
+    CourtLocation? parsedLocation;
+    final openingHoursJson = json['openingHours'] ?? json['opening_hours'];
+
+    final locationJson = json['location'];
+    if (locationJson is Map<String, dynamic>) {
+      parsedLocation = CourtLocation.fromJson(locationJson);
+    } else {
+      // Backend may return top-level lat/lng instead of nested location.
+      final lat = (json['lat'] ?? json['latitude']) as num?;
+      final lng = (json['lng'] ?? json['longitude']) as num?;
+      if (lat != null && lng != null) {
+        parsedLocation = CourtLocation(
+          latitude: lat.toDouble(),
+          longitude: lng.toDouble(),
+        );
+      }
+    }
+
     return Court(
       id: json['id'] as String,
       name: json['name'] as String,
@@ -69,12 +87,10 @@ class Court {
       details: json['details'] != null
           ? CourtDetails.fromJson(json['details'] as Map<String, dynamic>)
           : null,
-      openingHours: json['openingHours'] != null
-          ? OpeningHours.fromJson(json['openingHours'] as Map<String, dynamic>)
+      openingHours: openingHoursJson is Map<String, dynamic>
+          ? OpeningHours.fromJson(openingHoursJson)
           : null,
-      location: json['location'] != null
-          ? CourtLocation.fromJson(json['location'] as Map<String, dynamic>)
-          : null,
+      location: parsedLocation,
       distance: (json['distance'] as num?)?.toDouble(),
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
@@ -209,14 +225,49 @@ class OpeningHours {
   });
 
   factory OpeningHours.fromJson(Map<String, dynamic> json) {
+    String? mon = json['mon'] as String?;
+    String? tue = json['tue'] as String?;
+    String? wed = json['wed'] as String?;
+    String? thu = json['thu'] as String?;
+    String? fri = json['fri'] as String?;
+    String? sat = json['sat'] as String?;
+    String? sun = json['sun'] as String?;
+
+    // Fallback to backend weekdays/weekends format
+    final weekdays = json['weekdays'] as Map<String, dynamic>?;
+    final weekends = json['weekends'] as Map<String, dynamic>?;
+
+    if (weekdays != null) {
+      final open = weekdays['open'] as String?;
+      final close = weekdays['close'] as String?;
+      if (open != null && close != null) {
+        final range = '$open-$close';
+        mon ??= range;
+        tue ??= range;
+        wed ??= range;
+        thu ??= range;
+        fri ??= range;
+      }
+    }
+
+    if (weekends != null) {
+      final open = weekends['open'] as String?;
+      final close = weekends['close'] as String?;
+      if (open != null && close != null) {
+        final range = '$open-$close';
+        sat ??= range;
+        sun ??= range;
+      }
+    }
+
     return OpeningHours(
-      mon: json['mon'] as String?,
-      tue: json['tue'] as String?,
-      wed: json['wed'] as String?,
-      thu: json['thu'] as String?,
-      fri: json['fri'] as String?,
-      sat: json['sat'] as String?,
-      sun: json['sun'] as String?,
+      mon: mon,
+      tue: tue,
+      wed: wed,
+      thu: thu,
+      fri: fri,
+      sat: sat,
+      sun: sun,
     );
   }
 
@@ -269,10 +320,15 @@ class CourtLocation {
   const CourtLocation({required this.latitude, required this.longitude});
 
   factory CourtLocation.fromJson(Map<String, dynamic> json) {
-    return CourtLocation(
-      latitude: (json['latitude'] as num).toDouble(),
-      longitude: (json['longitude'] as num).toDouble(),
-    );
+    final lat = (json['latitude'] ?? json['lat']) as num?;
+    final lng = (json['longitude'] ?? json['lng']) as num?;
+    if (lat == null || lng == null) {
+      throw const FormatException(
+        'CourtLocation requires latitude/longitude or lat/lng',
+      );
+    }
+
+    return CourtLocation(latitude: lat.toDouble(), longitude: lng.toDouble());
   }
 
   Map<String, dynamic> toJson() {

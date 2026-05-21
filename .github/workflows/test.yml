@@ -2,9 +2,9 @@ name: Flutter Tests
 
 on:
   push:
-    branches: [main, develop, feature/*]
+    branches: [main, develop, feature/*, fix/*]
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, feature/*, fix/*]
 
 jobs:
   test:
@@ -94,4 +94,3 @@ jobs:
 
       - name: Build iOS (no codesign)
         run: flutter build ios --debug --no-codesign
-

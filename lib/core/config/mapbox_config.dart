@@ -1,3 +1,5 @@
+import 'env.dart';
+
 /// Mapbox configuration
 ///
 /// **IMPORTANT**: You need to set your Mapbox access token before running the app.
@@ -6,26 +8,14 @@
 ///
 /// ## How to set the token:
 ///
-/// ### Option 1: Run with dart-define (recommended)
-/// ```bash
-/// flutter run --dart-define=MAPBOX_ACCESS_TOKEN=pk.your_token_here
-/// ```
-///
-/// ### Option 2: Set directly in this file (development only)
-/// Change the `_defaultToken` value below.
+/// 1. Copy `.env.example` to `.env`
+/// 2. Add your Mapbox token: `MAPBOX_ACCESS_TOKEN=pk.your_token_here`
+/// 3. Run `dart run build_runner build --delete-conflicting-outputs`
 class MapboxConfig {
   MapboxConfig._();
 
-  // TODO: Replace with your Mapbox public access token for development
-  // Get your token from https://account.mapbox.com/access-tokens/
-  static const String _defaultToken = 'DEFAULT_TOKEN';
-
-  /// Mapbox public access token
-  /// Set via --dart-define=MAPBOX_ACCESS_TOKEN=pk.your_token_here
-  static const String accessToken = String.fromEnvironment(
-    'MAPBOX_ACCESS_TOKEN',
-    defaultValue: _defaultToken,
-  );
+  /// Mapbox public access token loaded from environment
+  static String get accessToken => Env.mapboxAccessToken;
 
   /// Check if access token is configured
   static bool get isConfigured =>

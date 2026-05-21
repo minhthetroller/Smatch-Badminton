@@ -12,8 +12,11 @@ class MapConstants {
   static const double defaultZoom = 14.0;
 
   /// Minimum and maximum zoom levels
-  static const double minZoom = 0.0;
-  static const double maxZoom = 22.0;
+  static const double minZoom = 7.0; // pg_tileserv data starts appearing at ~z8
+  // Backend tile payloads are reliable through z12 in the current dataset.
+  // Keeping source maxzoom at 12 lets Mapbox overzoom higher camera levels
+  // instead of requesting empty z13+ tiles that make markers disappear.
+  static const double maxZoom = 12.0;
 
   /// Default camera position
   static CameraOptions get defaultCameraOptions => CameraOptions(
@@ -28,8 +31,8 @@ class MapConstants {
   static const String courtsLayerId = 'courts-layer';
   static const String courtsTextLayerId = 'courts-text-layer';
 
-  /// Source layer name (from pg_tileserv)
-  static const String courtsSourceLayer = 'courts';
+  /// Source layer name (from pg_tileserv — uses schema-qualified table name)
+  static const String courtsSourceLayer = 'public.courts';
 
   /// Court marker colors
   static const int courtMarkerColor = 0xFFFF5722; // Orange

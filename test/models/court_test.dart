@@ -29,10 +29,7 @@ void main() {
             'sat': '07:00-23:00',
             'sun': '07:00-23:00',
           },
-          'location': {
-            'latitude': 21.0285,
-            'longitude': 105.8542,
-          },
+          'location': {'latitude': 21.0285, 'longitude': 105.8542},
           'distance': 1500.5,
           'createdAt': '2024-01-15T10:30:00.000Z',
           'updatedAt': '2024-01-20T15:45:00.000Z',
@@ -60,10 +57,7 @@ void main() {
       });
 
       test('should handle minimal JSON with only required fields', () {
-        final json = {
-          'id': 'court-456',
-          'name': 'Simple Court',
-        };
+        final json = {'id': 'court-456', 'name': 'Simple Court'};
 
         final court = Court.fromJson(json);
 
@@ -76,6 +70,20 @@ void main() {
         expect(court.openingHours, isNull);
         expect(court.location, isNull);
         expect(court.distance, isNull);
+      });
+
+      test('should parse snake_case opening_hours from backend', () {
+        final json = {
+          'id': 'court-456',
+          'name': 'Simple Court',
+          'opening_hours': {'mon': '06:00-22:00', 'wed': '06:00-22:00'},
+        };
+
+        final court = Court.fromJson(json);
+
+        expect(court.openingHours, isNotNull);
+        expect(court.openingHours!.mon, '06:00-22:00');
+        expect(court.openingHours!.wed, '06:00-22:00');
       });
 
       test('should handle null phone numbers list', () {
@@ -243,10 +251,7 @@ void main() {
       });
 
       test('should handle empty or null arrays', () {
-        final json = <String, dynamic>{
-          'amenities': null,
-          'payments': [],
-        };
+        final json = <String, dynamic>{'amenities': null, 'payments': []};
 
         final details = CourtDetails.fromJson(json);
 
@@ -301,10 +306,7 @@ void main() {
       });
 
       test('should handle null days', () {
-        final json = <String, dynamic>{
-          'mon': '06:00-22:00',
-          'wed': null,
-        };
+        final json = <String, dynamic>{'mon': '06:00-22:00', 'wed': null};
 
         final hours = OpeningHours.fromJson(json);
 
@@ -366,10 +368,7 @@ void main() {
 
     group('toJson', () {
       test('should serialize correctly', () {
-        const hours = OpeningHours(
-          mon: '06:00-22:00',
-          sat: '07:00-23:00',
-        );
+        const hours = OpeningHours(mon: '06:00-22:00', sat: '07:00-23:00');
 
         final json = hours.toJson();
 
@@ -383,10 +382,7 @@ void main() {
   group('CourtLocation', () {
     group('fromJson', () {
       test('should parse coordinates correctly', () {
-        final json = {
-          'latitude': 21.0285,
-          'longitude': 105.8542,
-        };
+        final json = {'latitude': 21.0285, 'longitude': 105.8542};
 
         final location = CourtLocation.fromJson(json);
 
@@ -395,10 +391,7 @@ void main() {
       });
 
       test('should handle integer coordinates', () {
-        final json = {
-          'latitude': 21,
-          'longitude': 106,
-        };
+        final json = {'latitude': 21, 'longitude': 106};
 
         final location = CourtLocation.fromJson(json);
 
@@ -419,4 +412,3 @@ void main() {
     });
   });
 }
-

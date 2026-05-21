@@ -20,8 +20,9 @@ void main() {
     mockPaymentService = MockPaymentService();
     notificationController = StreamController<PaymentNotification>.broadcast();
 
-    when(mockPaymentService.notificationStream)
-        .thenAnswer((_) => notificationController.stream);
+    when(
+      mockPaymentService.notificationStream,
+    ).thenAnswer((_) => notificationController.stream);
     when(mockPaymentService.isConnected).thenReturn(false);
     when(mockPaymentService.disconnect()).thenAnswer((_) async {});
 
@@ -52,7 +53,7 @@ void main() {
       test('should create booking and payment successfully', () async {
         final testBooking = Booking(
           id: 'booking-123',
-          subCourtId: 'subcourt-1',
+          subCourtId: '11111111-1111-1111-1111-111111111111',
           guestName: 'Test User',
           guestPhone: '0912345678',
           date: '2024-01-20',
@@ -78,17 +79,21 @@ void main() {
           wsSubscribeUrl: 'wss://api.example.com/ws/payments',
         );
 
-        when(mockPaymentService.createBooking(any))
-            .thenAnswer((_) async => testBooking);
-        when(mockPaymentService.createPayment(any))
-            .thenAnswer((_) async => testPaymentResponse);
-        when(mockPaymentService.connectAndSubscribe(any))
-            .thenAnswer((_) async {});
-        when(mockPaymentService.queryPaymentStatus(any))
-            .thenAnswer((_) async => testPaymentResponse.payment);
+        when(
+          mockPaymentService.createBooking(any),
+        ).thenAnswer((_) async => testBooking);
+        when(
+          mockPaymentService.createPayment(any),
+        ).thenAnswer((_) async => testPaymentResponse);
+        when(
+          mockPaymentService.connectAndSubscribe(any),
+        ).thenAnswer((_) async {});
+        when(
+          mockPaymentService.queryPaymentStatus(any),
+        ).thenAnswer((_) async => testPaymentResponse.payment);
 
         await viewModel.initializePayment(
-          subCourtId: 'subcourt-1',
+          subCourtId: '11111111-1111-1111-1111-111111111111',
           guestName: 'Test User',
           guestPhone: '0912345678',
           date: '2024-01-20',
@@ -107,11 +112,12 @@ void main() {
       });
 
       test('should handle booking creation error', () async {
-        when(mockPaymentService.createBooking(any))
-            .thenThrow(Exception('Failed to create booking'));
+        when(
+          mockPaymentService.createBooking(any),
+        ).thenThrow(Exception('Failed to create booking'));
 
         await viewModel.initializePayment(
-          subCourtId: 'subcourt-1',
+          subCourtId: '11111111-1111-1111-1111-111111111111',
           guestName: 'Test User',
           guestPhone: '0912345678',
           date: '2024-01-20',
@@ -123,10 +129,29 @@ void main() {
         expect(viewModel.errorMessage, contains('Failed to create booking'));
       });
 
+      test(
+        'should reject synthetic sub-court ID before creating booking',
+        () async {
+          await viewModel.initializePayment(
+            subCourtId: 'subcourt-2',
+            guestName: 'Test User',
+            guestPhone: '0912345678',
+            date: '2024-01-20',
+            startTime: '10:00',
+            endTime: '12:00',
+          );
+
+          expect(viewModel.state, PaymentViewState.error);
+          expect(viewModel.errorMessage, contains('Expected a database UUID'));
+          verifyNever(mockPaymentService.createBooking(any));
+          verifyNever(mockPaymentService.createPayment(any));
+        },
+      );
+
       test('should handle payment creation error', () async {
         final testBooking = Booking(
           id: 'booking-123',
-          subCourtId: 'subcourt-1',
+          subCourtId: '11111111-1111-1111-1111-111111111111',
           guestName: 'Test User',
           guestPhone: '0912345678',
           date: '2024-01-20',
@@ -136,13 +161,15 @@ void main() {
           status: BookingStatus.pending,
         );
 
-        when(mockPaymentService.createBooking(any))
-            .thenAnswer((_) async => testBooking);
-        when(mockPaymentService.createPayment(any))
-            .thenThrow(Exception('Failed to create payment'));
+        when(
+          mockPaymentService.createBooking(any),
+        ).thenAnswer((_) async => testBooking);
+        when(
+          mockPaymentService.createPayment(any),
+        ).thenThrow(Exception('Failed to create payment'));
 
         await viewModel.initializePayment(
-          subCourtId: 'subcourt-1',
+          subCourtId: '11111111-1111-1111-1111-111111111111',
           guestName: 'Test User',
           guestPhone: '0912345678',
           date: '2024-01-20',
@@ -167,7 +194,7 @@ void main() {
         // Setup initial state
         final testBooking = Booking(
           id: 'booking-123',
-          subCourtId: 'subcourt-1',
+          subCourtId: '11111111-1111-1111-1111-111111111111',
           guestName: 'Test User',
           guestPhone: '0912345678',
           date: '2024-01-20',
@@ -193,17 +220,21 @@ void main() {
           wsSubscribeUrl: 'wss://api.example.com/ws/payments',
         );
 
-        when(mockPaymentService.createBooking(any))
-            .thenAnswer((_) async => testBooking);
-        when(mockPaymentService.createPayment(any))
-            .thenAnswer((_) async => testPaymentResponse);
-        when(mockPaymentService.connectAndSubscribe(any))
-            .thenAnswer((_) async {});
-        when(mockPaymentService.queryPaymentStatus(any))
-            .thenAnswer((_) async => testPaymentResponse.payment);
+        when(
+          mockPaymentService.createBooking(any),
+        ).thenAnswer((_) async => testBooking);
+        when(
+          mockPaymentService.createPayment(any),
+        ).thenAnswer((_) async => testPaymentResponse);
+        when(
+          mockPaymentService.connectAndSubscribe(any),
+        ).thenAnswer((_) async {});
+        when(
+          mockPaymentService.queryPaymentStatus(any),
+        ).thenAnswer((_) async => testPaymentResponse.payment);
 
         await viewModel.initializePayment(
-          subCourtId: 'subcourt-1',
+          subCourtId: '11111111-1111-1111-1111-111111111111',
           guestName: 'Test User',
           guestPhone: '0912345678',
           date: '2024-01-20',
@@ -212,11 +243,13 @@ void main() {
         );
 
         // Send success notification
-        notificationController.add(const PaymentNotification(
-          type: 'payment_status',
-          paymentId: 'payment-123',
-          status: PaymentStatus.success,
-        ));
+        notificationController.add(
+          const PaymentNotification(
+            type: 'payment_status',
+            paymentId: 'payment-123',
+            status: PaymentStatus.success,
+          ),
+        );
 
         // Wait for notification processing
         await Future.delayed(const Duration(milliseconds: 100));
@@ -227,7 +260,7 @@ void main() {
       test('should handle failed notification', () async {
         final testBooking = Booking(
           id: 'booking-123',
-          subCourtId: 'subcourt-1',
+          subCourtId: '11111111-1111-1111-1111-111111111111',
           guestName: 'Test User',
           guestPhone: '0912345678',
           date: '2024-01-20',
@@ -253,17 +286,21 @@ void main() {
           wsSubscribeUrl: 'wss://api.example.com/ws/payments',
         );
 
-        when(mockPaymentService.createBooking(any))
-            .thenAnswer((_) async => testBooking);
-        when(mockPaymentService.createPayment(any))
-            .thenAnswer((_) async => testPaymentResponse);
-        when(mockPaymentService.connectAndSubscribe(any))
-            .thenAnswer((_) async {});
-        when(mockPaymentService.queryPaymentStatus(any))
-            .thenAnswer((_) async => testPaymentResponse.payment);
+        when(
+          mockPaymentService.createBooking(any),
+        ).thenAnswer((_) async => testBooking);
+        when(
+          mockPaymentService.createPayment(any),
+        ).thenAnswer((_) async => testPaymentResponse);
+        when(
+          mockPaymentService.connectAndSubscribe(any),
+        ).thenAnswer((_) async {});
+        when(
+          mockPaymentService.queryPaymentStatus(any),
+        ).thenAnswer((_) async => testPaymentResponse.payment);
 
         await viewModel.initializePayment(
-          subCourtId: 'subcourt-1',
+          subCourtId: '11111111-1111-1111-1111-111111111111',
           guestName: 'Test User',
           guestPhone: '0912345678',
           date: '2024-01-20',
@@ -272,12 +309,14 @@ void main() {
         );
 
         // Send failed notification
-        notificationController.add(const PaymentNotification(
-          type: 'payment_status',
-          paymentId: 'payment-123',
-          status: PaymentStatus.failed,
-          message: 'Payment was declined',
-        ));
+        notificationController.add(
+          const PaymentNotification(
+            type: 'payment_status',
+            paymentId: 'payment-123',
+            status: PaymentStatus.failed,
+            message: 'Payment was declined',
+          ),
+        );
 
         await Future.delayed(const Duration(milliseconds: 100));
 
@@ -290,7 +329,7 @@ void main() {
       test('should decode QR code from base64', () async {
         final testBooking = Booking(
           id: 'booking-123',
-          subCourtId: 'subcourt-1',
+          subCourtId: '11111111-1111-1111-1111-111111111111',
           guestName: 'Test User',
           guestPhone: '0912345678',
           date: '2024-01-20',
@@ -301,8 +340,9 @@ void main() {
         );
 
         // Valid PNG base64
-        final validBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-        
+        final validBase64 =
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
         final testPaymentResponse = CreatePaymentResponse(
           payment: const Payment(
             id: 'payment-123',
@@ -319,17 +359,21 @@ void main() {
           wsSubscribeUrl: 'wss://api.example.com/ws/payments',
         );
 
-        when(mockPaymentService.createBooking(any))
-            .thenAnswer((_) async => testBooking);
-        when(mockPaymentService.createPayment(any))
-            .thenAnswer((_) async => testPaymentResponse);
-        when(mockPaymentService.connectAndSubscribe(any))
-            .thenAnswer((_) async {});
-        when(mockPaymentService.queryPaymentStatus(any))
-            .thenAnswer((_) async => testPaymentResponse.payment);
+        when(
+          mockPaymentService.createBooking(any),
+        ).thenAnswer((_) async => testBooking);
+        when(
+          mockPaymentService.createPayment(any),
+        ).thenAnswer((_) async => testPaymentResponse);
+        when(
+          mockPaymentService.connectAndSubscribe(any),
+        ).thenAnswer((_) async {});
+        when(
+          mockPaymentService.queryPaymentStatus(any),
+        ).thenAnswer((_) async => testPaymentResponse.payment);
 
         await viewModel.initializePayment(
-          subCourtId: 'subcourt-1',
+          subCourtId: '11111111-1111-1111-1111-111111111111',
           guestName: 'Test User',
           guestPhone: '0912345678',
           date: '2024-01-20',
@@ -346,7 +390,7 @@ void main() {
       test('should create new payment for existing booking', () async {
         final testBooking = Booking(
           id: 'booking-123',
-          subCourtId: 'subcourt-1',
+          subCourtId: '11111111-1111-1111-1111-111111111111',
           guestName: 'Test User',
           guestPhone: '0912345678',
           date: '2024-01-20',
@@ -372,18 +416,22 @@ void main() {
           wsSubscribeUrl: 'wss://api.example.com/ws/payments',
         );
 
-        when(mockPaymentService.createBooking(any))
-            .thenAnswer((_) async => testBooking);
-        when(mockPaymentService.createPayment(any))
-            .thenAnswer((_) async => testPaymentResponse);
-        when(mockPaymentService.connectAndSubscribe(any))
-            .thenAnswer((_) async {});
-        when(mockPaymentService.queryPaymentStatus(any))
-            .thenAnswer((_) async => testPaymentResponse.payment);
+        when(
+          mockPaymentService.createBooking(any),
+        ).thenAnswer((_) async => testBooking);
+        when(
+          mockPaymentService.createPayment(any),
+        ).thenAnswer((_) async => testPaymentResponse);
+        when(
+          mockPaymentService.connectAndSubscribe(any),
+        ).thenAnswer((_) async {});
+        when(
+          mockPaymentService.queryPaymentStatus(any),
+        ).thenAnswer((_) async => testPaymentResponse.payment);
 
         // First payment
         await viewModel.initializePayment(
-          subCourtId: 'subcourt-1',
+          subCourtId: '11111111-1111-1111-1111-111111111111',
           guestName: 'Test User',
           guestPhone: '0912345678',
           date: '2024-01-20',
@@ -403,7 +451,7 @@ void main() {
       test('should update payment status', () async {
         final testBooking = Booking(
           id: 'booking-123',
-          subCourtId: 'subcourt-1',
+          subCourtId: '11111111-1111-1111-1111-111111111111',
           guestName: 'Test User',
           guestPhone: '0912345678',
           date: '2024-01-20',
@@ -429,22 +477,26 @@ void main() {
           wsSubscribeUrl: 'wss://api.example.com/ws/payments',
         );
 
-        when(mockPaymentService.createBooking(any))
-            .thenAnswer((_) async => testBooking);
-        when(mockPaymentService.createPayment(any))
-            .thenAnswer((_) async => testPaymentResponse);
-        when(mockPaymentService.connectAndSubscribe(any))
-            .thenAnswer((_) async {});
+        when(
+          mockPaymentService.createBooking(any),
+        ).thenAnswer((_) async => testBooking);
+        when(
+          mockPaymentService.createPayment(any),
+        ).thenAnswer((_) async => testPaymentResponse);
+        when(
+          mockPaymentService.connectAndSubscribe(any),
+        ).thenAnswer((_) async {});
         when(mockPaymentService.queryPaymentStatus(any)).thenAnswer(
-            (_) async => const Payment(
-                  id: 'payment-123',
-                  bookingId: 'booking-123',
-                  amount: 140000,
-                  status: PaymentStatus.success,
-                ));
+          (_) async => const Payment(
+            id: 'payment-123',
+            bookingId: 'booking-123',
+            amount: 140000,
+            status: PaymentStatus.success,
+          ),
+        );
 
         await viewModel.initializePayment(
-          subCourtId: 'subcourt-1',
+          subCourtId: '11111111-1111-1111-1111-111111111111',
           guestName: 'Test User',
           guestPhone: '0912345678',
           date: '2024-01-20',
@@ -459,4 +511,3 @@ void main() {
     });
   });
 }
-
