@@ -153,11 +153,7 @@ class MatchHost {
   final String? displayName;
   final String? avatarUrl;
 
-  const MatchHost({
-    required this.id,
-    this.displayName,
-    this.avatarUrl,
-  });
+  const MatchHost({required this.id, this.displayName, this.avatarUrl});
 
   factory MatchHost.fromJson(Map<String, dynamic> json) {
     return MatchHost(
@@ -168,11 +164,7 @@ class MatchHost {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'displayName': displayName,
-      'avatarUrl': avatarUrl,
-    };
+    return {'id': id, 'displayName': displayName, 'avatarUrl': avatarUrl};
   }
 }
 
@@ -182,11 +174,7 @@ class MatchPlayerUser {
   final String? displayName;
   final String? avatarUrl;
 
-  const MatchPlayerUser({
-    required this.id,
-    this.displayName,
-    this.avatarUrl,
-  });
+  const MatchPlayerUser({required this.id, this.displayName, this.avatarUrl});
 
   factory MatchPlayerUser.fromJson(Map<String, dynamic> json) {
     return MatchPlayerUser(
@@ -197,11 +185,7 @@ class MatchPlayerUser {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'displayName': displayName,
-      'avatarUrl': avatarUrl,
-    };
+    return {'id': id, 'displayName': displayName, 'avatarUrl': avatarUrl};
   }
 }
 
@@ -251,7 +235,9 @@ class MatchPlayer {
       id: json['id'] as String? ?? '',
       matchId: json['matchId'] as String? ?? '',
       userId: json['userId'] as String? ?? '',
-      status: MatchPlayerStatus.fromString(json['status'] as String? ?? 'PENDING'),
+      status: MatchPlayerStatus.fromString(
+        json['status'] as String? ?? 'PENDING',
+      ),
       joinedAt: joinedAt,
       user: user,
     );
@@ -271,7 +257,7 @@ class MatchPlayer {
 
 /// Current user's status in a match (returned when authenticated)
 class CurrentUserStatus {
-  final String id;  // MatchPlayer record ID - use this for API calls
+  final String id; // MatchPlayer record ID - use this for API calls
   final MatchPlayerStatus status;
   final int? position;
   final DateTime requestedAt;
@@ -288,7 +274,9 @@ class CurrentUserStatus {
   factory CurrentUserStatus.fromJson(Map<String, dynamic> json) {
     return CurrentUserStatus(
       id: json['id'] as String? ?? '',
-      status: MatchPlayerStatus.fromString(json['status'] as String? ?? 'PENDING'),
+      status: MatchPlayerStatus.fromString(
+        json['status'] as String? ?? 'PENDING',
+      ),
       position: json['position'] as int?,
       requestedAt: json['requestedAt'] != null
           ? DateTime.parse(json['requestedAt'] as String)
@@ -359,13 +347,18 @@ class Match {
       hostUserId: json['hostUserId'] as String? ?? '',
       title: json['title'] as String? ?? '',
       description: json['description'] as String?,
-      images: (json['images'] as List<dynamic>?)
+      images:
+          (json['images'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
           [],
       skillLevel: SkillLevel.fromString(json['skillLevel'] as String? ?? 'TB'),
-      shuttleType: ShuttleType.fromString(json['shuttleType'] as String? ?? 'OTHER'),
-      playerFormat: PlayerFormat.fromString(json['playerFormat'] as String? ?? 'ANY'),
+      shuttleType: ShuttleType.fromString(
+        json['shuttleType'] as String? ?? 'OTHER',
+      ),
+      playerFormat: PlayerFormat.fromString(
+        json['playerFormat'] as String? ?? 'ANY',
+      ),
       date: json['date'] as String? ?? '',
       startTime: json['startTime'] as String? ?? '',
       endTime: json['endTime'] as String? ?? '',
@@ -478,9 +471,10 @@ class MatchWithDetails extends Match {
     }
 
     // Handle acceptedPlayersCount - support both nested and flat 'slotsAccepted'
-    final acceptedCount = json['acceptedPlayersCount'] as int? ?? 
-                          json['slotsAccepted'] as int? ?? 
-                          0;
+    final acceptedCount =
+        json['acceptedPlayersCount'] as int? ??
+        json['slotsAccepted'] as int? ??
+        0;
 
     // Parse currentUserStatus if present (only returned for authenticated users)
     CurrentUserStatus? currentUserStatus;
@@ -488,12 +482,6 @@ class MatchWithDetails extends Match {
       currentUserStatus = CurrentUserStatus.fromJson(
         json['currentUserStatus'] as Map<String, dynamic>,
       );
-      // Debug: print parsed status
-      // ignore: avoid_print
-      print('Parsed currentUserStatus: id=${currentUserStatus.id}, status=${currentUserStatus.status.value}');
-    } else {
-      // ignore: avoid_print
-      print('currentUserStatus is null in API response');
     }
 
     return MatchWithDetails(
@@ -502,13 +490,18 @@ class MatchWithDetails extends Match {
       hostUserId: json['hostUserId'] as String? ?? '',
       title: json['title'] as String? ?? '',
       description: json['description'] as String?,
-      images: (json['images'] as List<dynamic>?)
+      images:
+          (json['images'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
           [],
       skillLevel: SkillLevel.fromString(json['skillLevel'] as String? ?? 'TB'),
-      shuttleType: ShuttleType.fromString(json['shuttleType'] as String? ?? 'OTHER'),
-      playerFormat: PlayerFormat.fromString(json['playerFormat'] as String? ?? 'ANY'),
+      shuttleType: ShuttleType.fromString(
+        json['shuttleType'] as String? ?? 'OTHER',
+      ),
+      playerFormat: PlayerFormat.fromString(
+        json['playerFormat'] as String? ?? 'ANY',
+      ),
       date: json['date'] as String? ?? '',
       startTime: json['startTime'] as String? ?? '',
       endTime: json['endTime'] as String? ?? '',
@@ -669,9 +662,7 @@ class JoinMatchRequest {
   const JoinMatchRequest({this.message});
 
   Map<String, dynamic> toJson() {
-    return {
-      if (message != null) 'message': message,
-    };
+    return {if (message != null) 'message': message};
   }
 }
 
@@ -682,9 +673,7 @@ class RespondToJoinRequest {
   const RespondToJoinRequest({required this.status});
 
   Map<String, dynamic> toJson() {
-    return {
-      'status': status,
-    };
+    return {'status': status};
   }
 }
 
@@ -737,7 +726,9 @@ class MatchPayment {
       appTransId: json['appTransId'] as String? ?? '',
       zpTransId: json['zpTransId'] as String?,
       amount: json['amount'] as int? ?? 0,
-      status: MatchPaymentStatus.fromString(json['status'] as String? ?? 'pending'),
+      status: MatchPaymentStatus.fromString(
+        json['status'] as String? ?? 'pending',
+      ),
       orderUrl: json['orderUrl'] as String?,
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
@@ -754,10 +745,7 @@ class PaymentQRCode {
   final String base64;
   final String rawBase64;
 
-  const PaymentQRCode({
-    required this.base64,
-    required this.rawBase64,
-  });
+  const PaymentQRCode({required this.base64, required this.rawBase64});
 
   factory PaymentQRCode.fromJson(Map<String, dynamic> json) {
     return PaymentQRCode(
@@ -795,32 +783,6 @@ class MatchPaymentResponse {
           ? DateTime.parse(json['expireAt'] as String)
           : DateTime.now().add(const Duration(minutes: 15)),
       wsSubscribeUrl: json['wsSubscribeUrl'] as String? ?? '',
-    );
-  }
-}
-
-/// Payment status query response
-class PaymentStatusQueryResponse {
-  final String paymentId;
-  final MatchPaymentStatus status;
-  final String? zpTransId;
-  final DateTime? paidAt;
-
-  const PaymentStatusQueryResponse({
-    required this.paymentId,
-    required this.status,
-    this.zpTransId,
-    this.paidAt,
-  });
-
-  factory PaymentStatusQueryResponse.fromJson(Map<String, dynamic> json) {
-    return PaymentStatusQueryResponse(
-      paymentId: json['paymentId'] as String? ?? '',
-      status: MatchPaymentStatus.fromString(json['status'] as String? ?? 'pending'),
-      zpTransId: json['zpTransId'] as String?,
-      paidAt: json['paidAt'] != null
-          ? DateTime.parse(json['paidAt'] as String)
-          : null,
     );
   }
 }

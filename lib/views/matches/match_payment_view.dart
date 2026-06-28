@@ -6,7 +6,9 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../models/match.dart';
+import '../../models/payment.dart';
 import '../../services/match_service.dart';
+import '../../services/payment_service.dart';
 import '../../view_models/auth_view_model.dart';
 import '../../view_models/match_view_model.dart';
 import 'match_success_screen.dart';
@@ -16,7 +18,6 @@ enum PaymentState {
   initial, // Initial state, showing match info
   creatingPayment, // Creating payment with ZaloPay
   waitingForPayment, // Showing QR code, waiting for user to pay
-  verifyingPayment, // Verifying payment status
   success, // Payment successful
   failed, // Payment failed or expired
 }
@@ -34,14 +35,17 @@ class MatchPaymentView extends StatefulWidget {
 
 class _MatchPaymentViewState extends State<MatchPaymentView> {
   final MatchService _matchService = MatchService();
-  
+  final PaymentService _paymentService = PaymentService();
+
   PaymentState _paymentState = PaymentState.initial;
   MatchPaymentResponse? _paymentResponse;
   String? _errorMessage;
-  Timer? _statusPollingTimer;
   Timer? _expirationTimer;
+  StreamSubscription<PaymentNotification>? _paymentSubscription;
   Duration? _timeRemaining;
   bool _accessDenied = false;
+  bool _hasTerminalPaymentStatus = false;
+  bool _isRefreshingPaymentSocket = false;
 
   @override
   void initState() {
@@ -53,28 +57,28 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
   /// For private matches, user must have PENDING_PAYMENT or ACCEPTED status (host approved)
   void _validateAccess() {
     if (!widget.match.isPrivate) return; // Public matches don't need validation
-    
+
     final authVM = context.read<AuthViewModel>();
     final userId = authVM.user?.id;
     if (userId == null) {
       _accessDenied = true;
       return;
     }
-    
+
     // Check player status in match
-    final playerInMatch = widget.match.players.where(
-      (p) => p.userId == userId
-    ).firstOrNull;
-    
+    final playerInMatch = widget.match.players
+        .where((p) => p.userId == userId)
+        .firstOrNull;
+
     if (playerInMatch == null) {
       // User hasn't requested to join yet - shouldn't be on payment screen
       _accessDenied = true;
       return;
     }
-    
+
     // For private matches, only PENDING_PAYMENT or ACCEPTED status can proceed to payment
     final status = playerInMatch.status;
-    if (status != MatchPlayerStatus.pendingPayment && 
+    if (status != MatchPlayerStatus.pendingPayment &&
         status != MatchPlayerStatus.accepted) {
       _accessDenied = true;
     }
@@ -97,8 +101,9 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
 
   @override
   void dispose() {
-    _statusPollingTimer?.cancel();
     _expirationTimer?.cancel();
+    _paymentSubscription?.cancel();
+    unawaited(_paymentService.disconnect());
     super.dispose();
   }
 
@@ -155,10 +160,7 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
                 const Text(
                   'This is a private match. You need host approval before you can proceed to payment.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: AppTheme.textSecondary,
-                  ),
+                  style: TextStyle(fontSize: 16, color: AppTheme.textSecondary),
                 ),
                 const SizedBox(height: 48),
                 SizedBox(
@@ -189,7 +191,7 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
         ),
       );
     }
-    
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: _paymentState == PaymentState.success
@@ -199,7 +201,9 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
               elevation: 0,
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back, color: AppTheme.textPrimary),
-                onPressed: _canGoBack() ? () => Navigator.of(context).pop() : null,
+                onPressed: _canGoBack()
+                    ? () => Navigator.of(context).pop()
+                    : null,
               ),
               title: Text(
                 _getAppBarTitle(),
@@ -215,8 +219,8 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
   }
 
   bool _canGoBack() {
-    return _paymentState == PaymentState.initial || 
-           _paymentState == PaymentState.failed;
+    return _paymentState == PaymentState.initial ||
+        _paymentState == PaymentState.failed;
   }
 
   String _getAppBarTitle() {
@@ -227,8 +231,6 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
         return 'Đang tạo thanh toán...';
       case PaymentState.waitingForPayment:
         return 'Quét mã QR';
-      case PaymentState.verifyingPayment:
-        return 'Đang xác nhận...';
       case PaymentState.success:
         return 'Thành công';
       case PaymentState.failed:
@@ -244,8 +246,6 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
         return _buildLoadingView('Đang tạo thanh toán...');
       case PaymentState.waitingForPayment:
         return _buildQRCodeView();
-      case PaymentState.verifyingPayment:
-        return _buildLoadingView('Đang xác nhận thanh toán...');
       case PaymentState.success:
         // Navigate to success screen
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -256,7 +256,7 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
         return _buildFailedView();
     }
   }
-  
+
   void _navigateToSuccessScreen() {
     if (!mounted) return;
     // Use pushReplacement to prevent going back to payment view
@@ -264,7 +264,9 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
       MaterialPageRoute(
         builder: (context) => MatchSuccessScreen(
           match: widget.match,
-          amountPaid: widget.match.price > 0 ? widget.match.price.toDouble() : null,
+          amountPaid: widget.match.price > 0
+              ? widget.match.price.toDouble()
+              : null,
         ),
       ),
     );
@@ -297,10 +299,7 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
           const SizedBox(height: 24),
           Text(
             message,
-            style: const TextStyle(
-              fontSize: 16,
-              color: AppTheme.textSecondary,
-            ),
+            style: const TextStyle(fontSize: 16, color: AppTheme.textSecondary),
           ),
         ],
       ),
@@ -321,7 +320,7 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: _timeRemaining!.inMinutes < 2 
+                color: _timeRemaining!.inMinutes < 2
                     ? Colors.red.withValues(alpha: 0.1)
                     : Colors.orange.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(20),
@@ -332,7 +331,9 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
                   Icon(
                     Icons.timer,
                     size: 18,
-                    color: _timeRemaining!.inMinutes < 2 ? Colors.red : Colors.orange,
+                    color: _timeRemaining!.inMinutes < 2
+                        ? Colors.red
+                        : Colors.orange,
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -340,7 +341,9 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: _timeRemaining!.inMinutes < 2 ? Colors.red : Colors.orange[800],
+                      color: _timeRemaining!.inMinutes < 2
+                          ? Colors.red
+                          : Colors.orange[800],
                     ),
                   ),
                 ],
@@ -382,34 +385,17 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                
+
                 // QR Code Image
                 _buildQRImage(),
-                
+
                 const SizedBox(height: 24),
                 const Text(
                   'Mở ứng dụng ZaloPay và quét mã QR để thanh toán',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.textSecondary,
-                  ),
+                  style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
                 ),
               ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // Refresh status button
-          OutlinedButton.icon(
-            onPressed: _checkPaymentStatus,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Kiểm tra trạng thái'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppTheme.primaryColor,
-              side: const BorderSide(color: AppTheme.primaryColor),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),
           ),
         ],
@@ -530,10 +516,7 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
                 ),
                 child: const Text(
                   'Thử lại',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
               ),
             ),
@@ -609,15 +592,35 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
             ],
           ),
           const Divider(height: 24),
-          _buildInfoRow(Icons.calendar_today, 'Ngày', _formatDate(widget.match.date)),
+          _buildInfoRow(
+            Icons.calendar_today,
+            'Ngày',
+            _formatDate(widget.match.date),
+          ),
           const SizedBox(height: 12),
-          _buildInfoRow(Icons.access_time, 'Thời gian', '${widget.match.startTime} - ${widget.match.endTime}'),
+          _buildInfoRow(
+            Icons.access_time,
+            'Thời gian',
+            '${widget.match.startTime} - ${widget.match.endTime}',
+          ),
           const SizedBox(height: 12),
-          _buildInfoRow(Icons.location_on, 'Sân', widget.match.court?.name ?? 'Unknown'),
+          _buildInfoRow(
+            Icons.location_on,
+            'Sân',
+            widget.match.court?.name ?? 'Unknown',
+          ),
           const SizedBox(height: 12),
-          _buildInfoRow(Icons.bar_chart, 'Trình độ', widget.match.skillLevel.displayName),
+          _buildInfoRow(
+            Icons.bar_chart,
+            'Trình độ',
+            widget.match.skillLevel.displayName,
+          ),
           const SizedBox(height: 12),
-          _buildInfoRow(Icons.people, 'Hình thức', widget.match.playerFormat.displayName),
+          _buildInfoRow(
+            Icons.people,
+            'Hình thức',
+            widget.match.playerFormat.displayName,
+          ),
         ],
       ),
     );
@@ -630,10 +633,7 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
         const SizedBox(width: 8),
         Text(
           '$label: ',
-          style: const TextStyle(
-            fontSize: 14,
-            color: AppTheme.textSecondary,
-          ),
+          style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary),
         ),
         Expanded(
           child: Text(
@@ -688,7 +688,12 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
     );
   }
 
-  Widget _buildPaymentRow(String label, String value, {bool isBold = false, Color? valueColor}) {
+  Widget _buildPaymentRow(
+    String label,
+    String value, {
+    bool isBold = false,
+    Color? valueColor,
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -743,10 +748,7 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
             decoration: BoxDecoration(
               color: AppTheme.primaryColor.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppTheme.primaryColor,
-                width: 2,
-              ),
+              border: Border.all(color: AppTheme.primaryColor, width: 2),
             ),
             child: Row(
               children: [
@@ -848,7 +850,6 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
   Widget? _buildBottomBar() {
     // Hide bottom bar for certain states
     if (_paymentState == PaymentState.creatingPayment ||
-        _paymentState == PaymentState.verifyingPayment ||
         _paymentState == PaymentState.success ||
         _paymentState == PaymentState.failed) {
       return null;
@@ -887,10 +888,7 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
             ),
             child: const Text(
               'Hủy thanh toán',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
           ),
         ),
@@ -924,10 +922,7 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
               children: [
                 const Text(
                   'Tổng thanh toán',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.textSecondary,
-                  ),
+                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -985,7 +980,10 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
     }
 
     // For paid matches, create ZaloPay payment
-    setState(() => _paymentState = PaymentState.creatingPayment);
+    setState(() {
+      _paymentState = PaymentState.creatingPayment;
+      _hasTerminalPaymentStatus = false;
+    });
 
     try {
       // Refresh auth token
@@ -993,7 +991,9 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
       await authVM.refreshAuthToken();
 
       // Create payment
-      final response = await _matchService.createMatchJoinPayment(widget.match.id);
+      final response = await _matchService.createMatchJoinPayment(
+        widget.match.id,
+      );
 
       if (!mounted) return;
 
@@ -1003,11 +1003,8 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
           _paymentState = PaymentState.waitingForPayment;
         });
 
-        // Start expiration countdown
         _startExpirationTimer();
-        
-        // Start polling for payment status
-        _startStatusPolling();
+        await _connectPaymentSocket();
       } else {
         setState(() {
           _paymentState = PaymentState.failed;
@@ -1052,6 +1049,7 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
     final expireAt = _paymentResponse?.expireAt;
     if (expireAt == null) return;
 
+    _expirationTimer?.cancel();
     // Calculate initial time remaining
     _updateTimeRemaining(expireAt);
 
@@ -1062,17 +1060,12 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
   }
 
   void _updateTimeRemaining(DateTime expireAt) {
-    final now = DateTime.now();
-    final remaining = expireAt.difference(now);
+    final now = DateTime.now().toUtc();
+    final remaining = expireAt.toUtc().difference(now);
 
     if (remaining.isNegative) {
-      _expirationTimer?.cancel();
-      _statusPollingTimer?.cancel();
       if (mounted) {
-        setState(() {
-          _paymentState = PaymentState.failed;
-          _errorMessage = 'Thời gian thanh toán đã hết hạn';
-        });
+        setState(() => _timeRemaining = Duration.zero);
       }
     } else {
       if (mounted) {
@@ -1081,61 +1074,140 @@ class _MatchPaymentViewState extends State<MatchPaymentView> {
     }
   }
 
-  void _startStatusPolling() {
-    // Poll every 3 seconds
-    _statusPollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      _checkPaymentStatus();
-    });
-  }
-
-  Future<void> _checkPaymentStatus() async {
-    if (_paymentResponse == null) return;
+  Future<void> _connectPaymentSocket() async {
+    final response = _paymentResponse;
+    if (response == null) return;
 
     try {
-      final response = await _matchService.queryMatchPaymentStatus(
+      await _paymentSubscription?.cancel();
+      _paymentSubscription = _paymentService.notificationStream.listen(
+        _handlePaymentNotification,
+        onError: (error) {
+          debugPrint('Match payment notification stream error: $error');
+        },
+      );
+
+      await _paymentService.connectToPaymentUpdates(
+        paymentId: response.payment.id,
+        wsSubscribeUrl: response.wsSubscribeUrl,
+        onConnectionInterrupted: () {
+          unawaited(_refreshPaymentSocket());
+        },
+      );
+    } catch (e) {
+      debugPrint('Match payment websocket connection failed: $e');
+      if (_isRefreshingPaymentSocket) {
+        rethrow;
+      }
+      unawaited(_refreshPaymentSocket());
+    }
+  }
+
+  void _handlePaymentNotification(PaymentNotification notification) {
+    if (notification.isTicketError) {
+      unawaited(_refreshPaymentSocket());
+      return;
+    }
+
+    if (notification.isError) {
+      if (!mounted) return;
+      setState(() {
+        _paymentState = PaymentState.failed;
+        _errorMessage = notification.message ?? 'Lỗi kết nối thanh toán';
+      });
+      return;
+    }
+
+    if (!notification.isPaymentStatus) return;
+
+    if (notification.isSuccess) {
+      _handlePaymentSuccess();
+    } else if (notification.isFailed) {
+      _handlePaymentFailed(notification.message ?? 'Thanh toán thất bại');
+    } else if (notification.isExpired) {
+      _handlePaymentFailed('Thanh toán đã hết hạn');
+    }
+  }
+
+  void _handlePaymentSuccess() {
+    _hasTerminalPaymentStatus = true;
+    _expirationTimer?.cancel();
+    unawaited(_paymentService.disconnect());
+    if (mounted) {
+      setState(() => _paymentState = PaymentState.success);
+    }
+  }
+
+  void _handlePaymentFailed(String message) {
+    _hasTerminalPaymentStatus = true;
+    _expirationTimer?.cancel();
+    unawaited(_paymentService.disconnect());
+    if (mounted) {
+      setState(() {
+        _paymentState = PaymentState.failed;
+        _errorMessage = message;
+      });
+    }
+  }
+
+  Future<void> _refreshPaymentSocket() async {
+    if (_isRefreshingPaymentSocket ||
+        _hasTerminalPaymentStatus ||
+        _paymentState != PaymentState.waitingForPayment ||
+        _paymentResponse == null) {
+      return;
+    }
+
+    _isRefreshingPaymentSocket = true;
+    try {
+      await _paymentService.disconnect();
+      final response = await _matchService.createMatchJoinPayment(
         widget.match.id,
-        _paymentResponse!.payment.id,
       );
 
       if (!mounted) return;
 
       if (response.success && response.data != null) {
-        final status = response.data!.status;
-        
-        if (status == MatchPaymentStatus.success) {
-          _statusPollingTimer?.cancel();
-          _expirationTimer?.cancel();
-          setState(() => _paymentState = PaymentState.success);
-        } else if (status == MatchPaymentStatus.failed || 
-                   status == MatchPaymentStatus.expired) {
-          _statusPollingTimer?.cancel();
-          _expirationTimer?.cancel();
-          setState(() {
-            _paymentState = PaymentState.failed;
-            _errorMessage = status == MatchPaymentStatus.expired 
-                ? 'Thanh toán đã hết hạn'
-                : 'Thanh toán thất bại';
-          });
-        }
+        setState(() {
+          _paymentResponse = response.data;
+          _errorMessage = null;
+        });
+        _startExpirationTimer();
+        await _connectPaymentSocket();
+      } else {
+        setState(() {
+          _paymentState = PaymentState.failed;
+          _errorMessage = response.error?.message ?? 'Không thể tạo thanh toán';
+        });
       }
     } catch (e) {
-      // Silently fail on polling errors
-      debugPrint('Payment status check failed: $e');
+      debugPrint('Match payment socket refresh failed: $e');
+      if (mounted && !_hasTerminalPaymentStatus) {
+        setState(() {
+          _paymentState = PaymentState.failed;
+          _errorMessage = e.toString();
+        });
+      }
+    } finally {
+      _isRefreshingPaymentSocket = false;
     }
   }
 
   void _cancelPayment() {
-    _statusPollingTimer?.cancel();
     _expirationTimer?.cancel();
+    unawaited(_paymentService.disconnect());
     Navigator.of(context).pop();
   }
 
   void _retryPayment() {
+    _expirationTimer?.cancel();
+    unawaited(_paymentService.disconnect());
     setState(() {
       _paymentState = PaymentState.initial;
       _paymentResponse = null;
       _errorMessage = null;
       _timeRemaining = null;
+      _hasTerminalPaymentStatus = false;
     });
   }
 }

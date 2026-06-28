@@ -51,6 +51,17 @@ void main() {
         expect(payment.updatedAt, isNull);
       });
 
+      test('should handle create-payment snapshot with only id and status', () {
+        final json = {'id': 'payment-456', 'status': 'pending'};
+
+        final payment = Payment.fromJson(json);
+
+        expect(payment.id, 'payment-456');
+        expect(payment.bookingId, '');
+        expect(payment.amount, 0);
+        expect(payment.status, PaymentStatus.pending);
+      });
+
       test('should handle null optional fields explicitly', () {
         final json = {
           'id': 'payment-789',
@@ -165,7 +176,10 @@ void main() {
 
         final qrCode = QrCodeData.fromJson(json);
 
-        expect(qrCode.base64, 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg...');
+        expect(
+          qrCode.base64,
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg...',
+        );
         expect(qrCode.rawBase64, 'iVBORw0KGgoAAAANSUhEUg...');
       });
     });
@@ -238,6 +252,7 @@ void main() {
           'paymentId': 'payment-123',
           'status': 'success',
           'bookingId': 'booking-456',
+          'matchPlayerId': null,
           'zpTransId': 'zp_trans_789',
           'message': 'Payment completed successfully',
         };
@@ -248,6 +263,7 @@ void main() {
         expect(notification.paymentId, 'payment-123');
         expect(notification.status, PaymentStatus.success);
         expect(notification.bookingId, 'booking-456');
+        expect(notification.matchPlayerId, isNull);
         expect(notification.zpTransId, 'zp_trans_789');
         expect(notification.message, 'Payment completed successfully');
       });
@@ -266,7 +282,34 @@ void main() {
         expect(notification.status, isNull);
         expect(notification.bookingId, isNull);
         expect(notification.zpTransId, isNull);
-        expect(notification.message, 'Successfully subscribed to payment updates');
+        expect(
+          notification.message,
+          'Successfully subscribed to payment updates',
+        );
+      });
+
+      test('should parse connected notification without payment id', () {
+        final notification = PaymentNotification.fromJson({
+          'type': 'connected',
+          'message': 'Connected to payment notification service',
+        });
+
+        expect(notification.type, 'connected');
+        expect(notification.paymentId, isNull);
+        expect(notification.isPaymentStatus, isFalse);
+      });
+
+      test('should parse websocket ticket error notification', () {
+        final notification = PaymentNotification.fromJson({
+          'type': 'error',
+          'code': 'INVALID_PAYMENT_WS_TICKET',
+          'paymentId': 'payment-123',
+          'message': 'Invalid or expired payment websocket ticket',
+        });
+
+        expect(notification.isError, isTrue);
+        expect(notification.isTicketError, isTrue);
+        expect(notification.code, 'INVALID_PAYMENT_WS_TICKET');
       });
 
       test('should handle null optional fields', () {
@@ -410,4 +453,3 @@ void main() {
     });
   });
 }
-

@@ -892,6 +892,17 @@ class _CreateMatchViewState extends State<CreateMatchView> {
       // Refresh auth token before creating match to avoid expired token errors
       final authVM = context.read<AuthViewModel>();
       final matchVM = context.read<MatchViewModel>();
+
+      if (authVM.isAnonymous) {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+            content: Text('Please sign in to create a match.'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+        return;
+      }
+
       final token = await authVM.refreshAuthToken();
       
       if (token == null) {

@@ -9,7 +9,7 @@ class MatchService {
   final ApiService _apiService;
 
   MatchService({ApiService? apiService})
-      : _apiService = apiService ?? ApiService();
+    : _apiService = apiService ?? ApiService();
 
   /// Get the current auth token
   String? get _authToken => ApiService.globalAuthToken;
@@ -54,7 +54,9 @@ class MatchService {
     return ApiResponse.fromJson(
       response,
       (data) => (data as List)
-          .map((item) => MatchWithDetails.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) => MatchWithDetails.fromJson(item as Map<String, dynamic>),
+          )
           .toList(),
     );
   }
@@ -65,7 +67,7 @@ class MatchService {
     bool includeExpired = false,
   }) async {
     _requireAuth();
-    
+
     final queryParams = <String, String>{};
     if (status != null) queryParams['status'] = status.value;
     if (includeExpired) queryParams['includeExpired'] = 'true';
@@ -79,7 +81,9 @@ class MatchService {
     return ApiResponse.fromJson(
       response,
       (data) => (data as List)
-          .map((item) => MatchWithDetails.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) => MatchWithDetails.fromJson(item as Map<String, dynamic>),
+          )
           .toList(),
     );
   }
@@ -89,10 +93,10 @@ class MatchService {
     bool includeExpired = false,
   }) async {
     _requireAuth();
-    
+
     final queryParams = <String, String>{};
     if (includeExpired) queryParams['includeExpired'] = 'true';
-    
+
     final response = await _apiService.getWithAuth(
       ApiConstants.matchesJoined,
       authToken: _authToken!,
@@ -102,7 +106,9 @@ class MatchService {
     return ApiResponse.fromJson(
       response,
       (data) => (data as List)
-          .map((item) => MatchWithDetails.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) => MatchWithDetails.fromJson(item as Map<String, dynamic>),
+          )
           .toList(),
     );
   }
@@ -111,7 +117,7 @@ class MatchService {
   /// Uses auth token if available to get currentUserStatus
   Future<ApiResponse<MatchWithDetails>> getMatchById(String id) async {
     final Map<String, dynamic> response;
-    
+
     // Use authenticated request if token is available
     // This enables the API to return currentUserStatus for the user
     if (_authToken != null) {
@@ -131,9 +137,10 @@ class MatchService {
 
   /// Create a new match
   Future<ApiResponse<MatchWithDetails>> createMatch(
-      CreateMatchRequest request) async {
+    CreateMatchRequest request,
+  ) async {
     _requireAuth();
-    
+
     final response = await _apiService.postWithAuth(
       ApiConstants.matches,
       authToken: _authToken!,
@@ -146,8 +153,32 @@ class MatchService {
     );
   }
 
-  /// Upload a single image file and return its public S3 URL
-  Future<String> _uploadImage(File image) async {
+  /// Upload a single image file and return its public S3 URL.
+  ///
+  /// Validates against the match-image upload protocol constraints
+  /// (allowed types: .jpg/.jpeg/.png, max size: 5 MB) before making
+  /// the request.
+  Future<String> uploadMatchImage(File image) async {
+    _requireAuth();
+
+    final extension = image.path.toLowerCase().split('.').last;
+    const allowedExtensions = {'jpg', 'jpeg', 'png'};
+    if (!allowedExtensions.contains(extension)) {
+      throw ApiException(
+        'Unsupported image type. Use JPG or PNG.',
+        statusCode: 400,
+      );
+    }
+
+    final fileSize = await image.length();
+    const maxFileSize = 5 * 1024 * 1024; // 5 MB
+    if (fileSize > maxFileSize) {
+      throw ApiException(
+        'Image size must be less than 5MB',
+        statusCode: 400,
+      );
+    }
+
     final response = await _apiService.postMultipartWithAuth(
       ApiConstants.matchImageUpload,
       authToken: _authToken!,
@@ -169,7 +200,7 @@ class MatchService {
 
     final imageUrls = <String>[];
     for (final image in images) {
-      final url = await _uploadImage(image);
+      final url = await uploadMatchImage(image);
       imageUrls.add(url);
     }
 
@@ -207,7 +238,7 @@ class MatchService {
     UpdateMatchRequest request,
   ) async {
     _requireAuth();
-    
+
     final response = await _apiService.putWithAuth(
       ApiConstants.matchById(id),
       authToken: _authToken!,
@@ -223,7 +254,7 @@ class MatchService {
   /// Cancel (delete) a match
   Future<ApiResponse<void>> cancelMatch(String id) async {
     _requireAuth();
-    
+
     final response = await _apiService.deleteWithAuth(
       ApiConstants.matchById(id),
       authToken: _authToken!,
@@ -237,7 +268,7 @@ class MatchService {
     JoinMatchRequest? request,
   }) async {
     _requireAuth();
-    
+
     final response = await _apiService.postWithAuth(
       ApiConstants.matchJoin(matchId),
       authToken: _authToken!,
@@ -253,7 +284,7 @@ class MatchService {
   /// Leave a match
   Future<ApiResponse<void>> leaveMatch(String matchId) async {
     _requireAuth();
-    
+
     final response = await _apiService.deleteWithAuth(
       ApiConstants.matchLeave(matchId),
       authToken: _authToken!,
@@ -268,7 +299,7 @@ class MatchService {
     MatchPlayerStatus? status,
   }) async {
     _requireAuth();
-    
+
     final queryParams = <String, String>{};
     if (status != null) queryParams['status'] = status.value;
 
@@ -293,7 +324,7 @@ class MatchService {
     RespondToJoinRequest request,
   ) async {
     _requireAuth();
-    
+
     final response = await _apiService.postWithAuth(
       ApiConstants.matchRespondToRequest(matchId, playerId),
       authToken: _authToken!,
@@ -312,7 +343,7 @@ class MatchService {
     String matchId,
   ) async {
     _requireAuth();
-    
+
     final response = await _apiService.postWithAuth(
       ApiConstants.matchPayment(matchId),
       authToken: _authToken!,
@@ -321,24 +352,6 @@ class MatchService {
     return ApiResponse.fromJson(
       response,
       (data) => MatchPaymentResponse.fromJson(data as Map<String, dynamic>),
-    );
-  }
-
-  /// Query match payment status from ZaloPay
-  Future<ApiResponse<PaymentStatusQueryResponse>> queryMatchPaymentStatus(
-    String matchId,
-    String paymentId,
-  ) async {
-    _requireAuth();
-    
-    final response = await _apiService.getWithAuth(
-      ApiConstants.matchPaymentStatus(matchId, paymentId),
-      authToken: _authToken!,
-    );
-
-    return ApiResponse.fromJson(
-      response,
-      (data) => PaymentStatusQueryResponse.fromJson(data as Map<String, dynamic>),
     );
   }
 }

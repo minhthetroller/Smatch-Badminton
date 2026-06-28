@@ -9,10 +9,13 @@ import '../models/booking.dart';
 import '../models/payment.dart';
 import 'api_service.dart';
 
+typedef PaymentWebSocketFactory = WebSocketChannel Function(Uri uri);
+
 /// Service for handling payments and WebSocket connections
 class PaymentService {
   final ApiService _apiService;
   final FirebaseAuth _firebaseAuth;
+  final PaymentWebSocketFactory _webSocketFactory;
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
 
@@ -22,11 +25,19 @@ class PaymentService {
 
   // Connection state
   bool _isConnected = false;
-  String? _currentPaymentId;
+  bool _isClosingConnection = false;
+  bool _terminalMessageReceived = false;
+  bool _socketErrorMessageReceived = false;
+  bool _connectionIssueReported = false;
+  VoidCallback? _onConnectionInterrupted;
 
-  PaymentService({ApiService? apiService, FirebaseAuth? firebaseAuth})
-    : _apiService = apiService ?? ApiService(),
-      _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance;
+  PaymentService({
+    ApiService? apiService,
+    FirebaseAuth? firebaseAuth,
+    PaymentWebSocketFactory? webSocketFactory,
+  }) : _apiService = apiService ?? ApiService(),
+       _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
+       _webSocketFactory = webSocketFactory ?? WebSocketChannel.connect;
 
   /// Stream of payment notifications
   Stream<PaymentNotification> get notificationStream =>
@@ -127,21 +138,6 @@ class PaymentService {
     );
   }
 
-  /// Query payment status (syncs with ZaloPay)
-  Future<Payment> queryPaymentStatus(String paymentId) async {
-    final response = await _apiService.get(
-      ApiConstants.paymentStatus(paymentId),
-    );
-
-    if (response['success'] == true && response['data'] != null) {
-      return Payment.fromJson(response['data'] as Map<String, dynamic>);
-    }
-
-    throw ApiException(
-      response['error']?['message'] ?? 'Failed to query payment status',
-    );
-  }
-
   /// Get booking by ID
   Future<Booking> getBooking(String bookingId) async {
     final response = await _apiService.get(ApiConstants.bookingById(bookingId));
@@ -155,17 +151,27 @@ class PaymentService {
     );
   }
 
-  /// Connect to WebSocket and subscribe to payment updates
-  Future<void> connectAndSubscribe(String paymentId) async {
+  /// Connect directly to the backend-provided payment WebSocket URL.
+  Future<void> connectToPaymentUpdates({
+    required String paymentId,
+    required String wsSubscribeUrl,
+    VoidCallback? onConnectionInterrupted,
+  }) async {
     await disconnect(); // Disconnect existing connection if any
 
-    _currentPaymentId = paymentId;
+    if (wsSubscribeUrl.isEmpty) {
+      throw ApiException('Missing payment websocket URL');
+    }
+
+    _terminalMessageReceived = false;
+    _socketErrorMessageReceived = false;
+    _connectionIssueReported = false;
+    _onConnectionInterrupted = onConnectionInterrupted;
 
     try {
-      final wsUrl = ApiConstants.wsPayments;
-      debugPrint('PaymentService: Connecting to WebSocket: $wsUrl');
+      debugPrint('PaymentService: Connecting to WebSocket: $wsSubscribeUrl');
 
-      _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
+      _channel = _webSocketFactory(Uri.parse(wsSubscribeUrl));
 
       // Wait for connection to be ready
       await _channel!.ready;
@@ -180,30 +186,23 @@ class PaymentService {
         onError: (error) {
           debugPrint('PaymentService: WebSocket error: $error');
           _isConnected = false;
+          _reportConnectionInterrupted();
         },
         onDone: () {
           debugPrint('PaymentService: WebSocket connection closed');
           _isConnected = false;
+          if (!_isClosingConnection &&
+              !_terminalMessageReceived &&
+              !_socketErrorMessageReceived) {
+            _reportConnectionInterrupted();
+          }
         },
       );
-
-      // Subscribe to payment updates
-      _subscribe(paymentId);
     } catch (e) {
       debugPrint('PaymentService: Failed to connect WebSocket: $e');
       _isConnected = false;
       rethrow;
     }
-  }
-
-  /// Subscribe to payment updates
-  void _subscribe(String paymentId) {
-    if (_channel == null || !_isConnected) return;
-
-    final message = jsonEncode({'action': 'subscribe', 'paymentId': paymentId});
-
-    debugPrint('PaymentService: Subscribing to payment: $paymentId');
-    _channel!.sink.add(message);
   }
 
   /// Handle incoming WebSocket message
@@ -213,6 +212,12 @@ class PaymentService {
 
       final data = jsonDecode(message as String) as Map<String, dynamic>;
       final notification = PaymentNotification.fromJson(data);
+      if (notification.isTerminal) {
+        _terminalMessageReceived = true;
+      }
+      if (notification.isError) {
+        _socketErrorMessageReceived = true;
+      }
 
       _notificationController.add(notification);
 
@@ -226,43 +231,34 @@ class PaymentService {
     }
   }
 
-  /// Send ping to keep connection alive
-  void sendPing() {
-    if (_channel == null || !_isConnected) return;
-
-    final message = jsonEncode({'action': 'ping'});
-    _channel!.sink.add(message);
-  }
-
-  /// Unsubscribe from payment updates
-  void unsubscribe() {
-    if (_channel == null || !_isConnected || _currentPaymentId == null) return;
-
-    final message = jsonEncode({
-      'action': 'unsubscribe',
-      'paymentId': _currentPaymentId,
-    });
-
-    _channel!.sink.add(message);
+  void _reportConnectionInterrupted() {
+    if (_connectionIssueReported) return;
+    _connectionIssueReported = true;
+    _onConnectionInterrupted?.call();
   }
 
   /// Disconnect WebSocket
   Future<void> disconnect() async {
+    _isClosingConnection = true;
     _isConnected = false;
-    _currentPaymentId = null;
+    _onConnectionInterrupted = null;
 
     await _subscription?.cancel();
     _subscription = null;
 
     await _channel?.sink.close();
     _channel = null;
+    _isClosingConnection = false;
+    _terminalMessageReceived = false;
+    _socketErrorMessageReceived = false;
+    _connectionIssueReported = false;
 
     debugPrint('PaymentService: Disconnected');
   }
 
   /// Dispose resources
   void dispose() {
-    disconnect();
+    unawaited(disconnect());
     _notificationController.close();
     _apiService.dispose();
   }

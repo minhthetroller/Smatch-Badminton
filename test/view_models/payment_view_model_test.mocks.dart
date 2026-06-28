@@ -4,6 +4,7 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i5;
+import 'dart:ui' as _i6;
 
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:smatch_badminton/models/booking.dart' as _i2;
@@ -124,22 +125,6 @@ class MockPaymentService extends _i1.Mock implements _i4.PaymentService {
       ) as _i5.Future<_i3.Payment>);
 
   @override
-  _i5.Future<_i3.Payment> queryPaymentStatus(String? paymentId) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #queryPaymentStatus,
-          [paymentId],
-        ),
-        returnValue: _i5.Future<_i3.Payment>.value(_FakePayment_2(
-          this,
-          Invocation.method(
-            #queryPaymentStatus,
-            [paymentId],
-          ),
-        )),
-      ) as _i5.Future<_i3.Payment>);
-
-  @override
   _i5.Future<_i2.Booking> getBooking(String? bookingId) => (super.noSuchMethod(
         Invocation.method(
           #getBooking,
@@ -155,33 +140,24 @@ class MockPaymentService extends _i1.Mock implements _i4.PaymentService {
       ) as _i5.Future<_i2.Booking>);
 
   @override
-  _i5.Future<void> connectAndSubscribe(String? paymentId) =>
+  _i5.Future<void> connectToPaymentUpdates({
+    required String? paymentId,
+    required String? wsSubscribeUrl,
+    _i6.VoidCallback? onConnectionInterrupted,
+  }) =>
       (super.noSuchMethod(
         Invocation.method(
-          #connectAndSubscribe,
-          [paymentId],
+          #connectToPaymentUpdates,
+          [],
+          {
+            #paymentId: paymentId,
+            #wsSubscribeUrl: wsSubscribeUrl,
+            #onConnectionInterrupted: onConnectionInterrupted,
+          },
         ),
         returnValue: _i5.Future<void>.value(),
         returnValueForMissingStub: _i5.Future<void>.value(),
       ) as _i5.Future<void>);
-
-  @override
-  void sendPing() => super.noSuchMethod(
-        Invocation.method(
-          #sendPing,
-          [],
-        ),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  void unsubscribe() => super.noSuchMethod(
-        Invocation.method(
-          #unsubscribe,
-          [],
-        ),
-        returnValueForMissingStub: null,
-      );
 
   @override
   _i5.Future<void> disconnect() => (super.noSuchMethod(

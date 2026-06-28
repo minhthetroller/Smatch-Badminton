@@ -23,13 +23,16 @@ class Payment {
   });
 
   factory Payment.fromJson(Map<String, dynamic> json) {
+    final statusValue = json['status'];
     return Payment(
       id: json['id'] as String,
-      bookingId: json['bookingId'] as String,
+      bookingId: json['bookingId'] as String? ?? '',
       appTransId: json['appTransId'] as String?,
       zpTransId: json['zpTransId'] as String?,
-      amount: json['amount'] as int,
-      status: PaymentStatus.fromString(json['status'] as String),
+      amount: (json['amount'] as num?)?.toInt() ?? 0,
+      status: statusValue != null && statusValue is String
+          ? PaymentStatus.fromString(statusValue)
+          : PaymentStatus.pending,
       orderUrl: json['orderUrl'] as String?,
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
@@ -78,10 +81,7 @@ class QrCodeData {
   final String base64;
   final String rawBase64;
 
-  const QrCodeData({
-    required this.base64,
-    required this.rawBase64,
-  });
+  const QrCodeData({required this.base64, required this.rawBase64});
 
   factory QrCodeData.fromJson(Map<String, dynamic> json) {
     return QrCodeData(
@@ -124,37 +124,47 @@ class CreatePaymentResponse {
 /// WebSocket payment notification message
 class PaymentNotification {
   final String type;
-  final String paymentId;
+  final String? paymentId;
   final PaymentStatus? status;
   final String? bookingId;
+  final String? matchPlayerId;
   final String? zpTransId;
+  final String? code;
   final String? message;
 
   const PaymentNotification({
     required this.type,
-    required this.paymentId,
+    this.paymentId,
     this.status,
     this.bookingId,
+    this.matchPlayerId,
     this.zpTransId,
+    this.code,
     this.message,
   });
 
   factory PaymentNotification.fromJson(Map<String, dynamic> json) {
     return PaymentNotification(
       type: json['type'] as String,
-      paymentId: json['paymentId'] as String,
+      paymentId: json['paymentId'] as String?,
       status: json['status'] != null
           ? PaymentStatus.fromString(json['status'] as String)
           : null,
       bookingId: json['bookingId'] as String?,
+      matchPlayerId: json['matchPlayerId'] as String?,
       zpTransId: json['zpTransId'] as String?,
+      code: json['code'] as String?,
       message: json['message'] as String?,
     );
   }
 
   bool get isPaymentStatus => type == 'payment_status';
   bool get isSubscribed => type == 'subscribed';
-  bool get isSuccess => status == PaymentStatus.success;
-  bool get isFailed => status == PaymentStatus.failed;
+  bool get isError => type == 'error';
+  bool get isTicketError => code == 'INVALID_PAYMENT_WS_TICKET';
+  bool get isSuccess => isPaymentStatus && status == PaymentStatus.success;
+  bool get isPending => isPaymentStatus && status == PaymentStatus.pending;
+  bool get isFailed => isPaymentStatus && status == PaymentStatus.failed;
+  bool get isExpired => isPaymentStatus && status == PaymentStatus.expired;
+  bool get isTerminal => isSuccess || isFailed || isExpired;
 }
-

@@ -49,9 +49,8 @@ class PaymentViewModel extends ChangeNotifier {
 
   // WebSocket subscription
   StreamSubscription<PaymentNotification>? _notificationSubscription;
-
-  // Polling timer (fallback for WebSocket issues)
-  Timer? _pollingTimer;
+  bool _hasTerminalStatus = false;
+  bool _isRefreshingPaymentSocket = false;
 
   // Store booking requests for retry
   List<BookingRequest>? _pendingBookingRequests;
@@ -86,10 +85,17 @@ class PaymentViewModel extends ChangeNotifier {
     }
   }
 
-  /// Get formatted remaining time (mm:ss)
+  /// Get formatted remaining time (HH:mm:ss if >= 1 hour, mm:ss otherwise)
   String get formattedRemainingTime {
-    final minutes = _remainingTime.inMinutes;
-    final seconds = _remainingTime.inSeconds % 60;
+    final totalSeconds = _remainingTime.inSeconds;
+    if (totalSeconds >= 3600) {
+      final hours = totalSeconds ~/ 3600;
+      final minutes = (totalSeconds % 3600) ~/ 60;
+      final seconds = totalSeconds % 60;
+      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    }
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
@@ -119,6 +125,7 @@ class PaymentViewModel extends ChangeNotifier {
 
     _state = PaymentViewState.creatingBooking;
     _errorMessage = null;
+    _hasTerminalStatus = false;
     notifyListeners();
 
     try {
@@ -154,7 +161,6 @@ class PaymentViewModel extends ChangeNotifier {
 
       await _connectWebSocket();
       _startCountdown();
-      _startPolling(); // Fallback polling
     } catch (e) {
       debugPrint('PaymentViewModel: Error: $e');
       _state = PaymentViewState.error;
@@ -197,6 +203,7 @@ class PaymentViewModel extends ChangeNotifier {
 
     _state = PaymentViewState.creatingBooking;
     _errorMessage = null;
+    _hasTerminalStatus = false;
     _bookings = [];
     notifyListeners();
 
@@ -244,7 +251,6 @@ class PaymentViewModel extends ChangeNotifier {
 
       await _connectWebSocket();
       _startCountdown();
-      _startPolling(); // Fallback polling
     } catch (e) {
       debugPrint('PaymentViewModel: Error: $e');
       _state = PaymentViewState.error;
@@ -268,7 +274,9 @@ class PaymentViewModel extends ChangeNotifier {
     if (_paymentResponse == null) return;
 
     try {
-      // Subscribe to notifications
+      // Subscribe to notifications — attach listener before connecting
+      // to avoid missing notifications sent immediately on subscription
+      await _notificationSubscription?.cancel();
       _notificationSubscription = _paymentService.notificationStream.listen(
         _handleNotification,
         onError: (error) {
@@ -276,11 +284,19 @@ class PaymentViewModel extends ChangeNotifier {
         },
       );
 
-      // Connect to WebSocket
-      await _paymentService.connectAndSubscribe(_paymentResponse!.payment.id);
+      await _paymentService.connectToPaymentUpdates(
+        paymentId: _paymentResponse!.payment.id,
+        wsSubscribeUrl: _paymentResponse!.wsSubscribeUrl,
+        onConnectionInterrupted: () {
+          unawaited(_refreshPaymentSocket());
+        },
+      );
     } catch (e) {
       debugPrint('PaymentViewModel: WebSocket connection failed: $e');
-      // Continue with polling fallback
+      if (_isRefreshingPaymentSocket) {
+        rethrow;
+      }
+      unawaited(_refreshPaymentSocket());
     }
   }
 
@@ -289,11 +305,26 @@ class PaymentViewModel extends ChangeNotifier {
     debugPrint('PaymentViewModel: Received notification: ${notification.type}');
     _lastNotification = notification;
 
+    if (notification.isTicketError) {
+      unawaited(_refreshPaymentSocket());
+      notifyListeners();
+      return;
+    }
+
+    if (notification.isError) {
+      _state = PaymentViewState.error;
+      _errorMessage = notification.message ?? 'Payment connection error.';
+      notifyListeners();
+      return;
+    }
+
     if (notification.isPaymentStatus) {
       if (notification.isSuccess) {
         _handlePaymentSuccess();
       } else if (notification.isFailed) {
         _handlePaymentFailed(notification.message);
+      } else if (notification.isExpired) {
+        _handlePaymentExpired();
       }
     }
 
@@ -303,7 +334,9 @@ class PaymentViewModel extends ChangeNotifier {
   /// Handle successful payment
   void _handlePaymentSuccess() {
     debugPrint('PaymentViewModel: Payment successful!');
+    _hasTerminalStatus = true;
     _stopTimers();
+    unawaited(_paymentService.disconnect());
     _state = PaymentViewState.paymentSuccess;
     notifyListeners();
   }
@@ -311,7 +344,9 @@ class PaymentViewModel extends ChangeNotifier {
   /// Handle failed payment
   void _handlePaymentFailed(String? message) {
     debugPrint('PaymentViewModel: Payment failed: $message');
+    _hasTerminalStatus = true;
     _stopTimers();
+    unawaited(_paymentService.disconnect());
     _state = PaymentViewState.paymentFailed;
     _errorMessage = message ?? 'Payment failed. Please try again.';
     notifyListeners();
@@ -321,22 +356,19 @@ class PaymentViewModel extends ChangeNotifier {
   void _startCountdown() {
     if (_paymentResponse == null) return;
 
-    final expireAt = _paymentResponse!.expireAt;
+    _countdownTimer?.cancel();
+    final expireAt = _paymentResponse!.expireAt.toUtc();
     _updateRemainingTime(expireAt);
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _updateRemainingTime(expireAt);
-
-      if (_remainingTime.isNegative || _remainingTime == Duration.zero) {
-        _handlePaymentExpired();
-      }
     });
   }
 
-  /// Update remaining time
+  /// Update remaining time — normalizes to UTC for safe comparison
   void _updateRemainingTime(DateTime expireAt) {
-    final now = DateTime.now();
-    _remainingTime = expireAt.difference(now);
+    final nowUtc = DateTime.now().toUtc();
+    _remainingTime = expireAt.difference(nowUtc);
 
     if (_remainingTime.isNegative) {
       _remainingTime = Duration.zero;
@@ -348,44 +380,47 @@ class PaymentViewModel extends ChangeNotifier {
   /// Handle payment expiration
   void _handlePaymentExpired() {
     debugPrint('PaymentViewModel: Payment expired');
+    _hasTerminalStatus = true;
     _stopTimers();
+    unawaited(_paymentService.disconnect());
     _state = PaymentViewState.paymentExpired;
     _errorMessage = 'Payment time expired. Please try again.';
     notifyListeners();
-  }
-
-  /// Start polling as fallback for WebSocket issues
-  void _startPolling() {
-    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
-      if (!isPaymentActive) {
-        timer.cancel();
-        return;
-      }
-
-      try {
-        final payment = await _paymentService.queryPaymentStatus(
-          _paymentResponse!.payment.id,
-        );
-
-        if (payment.status == PaymentStatus.success) {
-          _handlePaymentSuccess();
-        } else if (payment.status == PaymentStatus.failed) {
-          _handlePaymentFailed('Payment failed');
-        } else if (payment.status == PaymentStatus.expired) {
-          _handlePaymentExpired();
-        }
-      } catch (e) {
-        debugPrint('PaymentViewModel: Polling error: $e');
-      }
-    });
   }
 
   /// Stop all timers
   void _stopTimers() {
     _countdownTimer?.cancel();
     _countdownTimer = null;
-    _pollingTimer?.cancel();
-    _pollingTimer = null;
+  }
+
+  Future<void> _refreshPaymentSocket() async {
+    if (_isRefreshingPaymentSocket ||
+        _hasTerminalStatus ||
+        !isPaymentActive ||
+        _booking == null) {
+      return;
+    }
+
+    _isRefreshingPaymentSocket = true;
+    try {
+      await _paymentService.disconnect();
+      _paymentResponse = await _paymentService.createPayment(_booking!.id);
+      _errorMessage = null;
+      notifyListeners();
+
+      _startCountdown();
+      await _connectWebSocket();
+    } catch (e) {
+      debugPrint('PaymentViewModel: Failed to refresh payment socket: $e');
+      if (!_hasTerminalStatus) {
+        _state = PaymentViewState.error;
+        _errorMessage = e.toString();
+        notifyListeners();
+      }
+    } finally {
+      _isRefreshingPaymentSocket = false;
+    }
   }
 
   /// Retry payment (create new bookings and payment)
@@ -414,6 +449,7 @@ class PaymentViewModel extends ChangeNotifier {
 
     _state = PaymentViewState.creatingPayment;
     _errorMessage = null;
+    _hasTerminalStatus = false;
     notifyListeners();
 
     try {
@@ -422,7 +458,6 @@ class PaymentViewModel extends ChangeNotifier {
 
       await _connectWebSocket();
       _startCountdown();
-      _startPolling();
     } catch (e) {
       debugPrint('PaymentViewModel: Retry error: $e');
       _state = PaymentViewState.error;
@@ -432,32 +467,11 @@ class PaymentViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Refresh payment status manually
-  Future<void> refreshPaymentStatus() async {
-    if (_paymentResponse == null) return;
-
-    try {
-      final payment = await _paymentService.queryPaymentStatus(
-        _paymentResponse!.payment.id,
-      );
-
-      if (payment.status == PaymentStatus.success) {
-        _handlePaymentSuccess();
-      } else if (payment.status == PaymentStatus.failed) {
-        _handlePaymentFailed('Payment failed');
-      } else if (payment.status == PaymentStatus.expired) {
-        _handlePaymentExpired();
-      }
-    } catch (e) {
-      debugPrint('PaymentViewModel: Refresh error: $e');
-    }
-  }
-
   @override
   void dispose() {
     _stopTimers();
     _notificationSubscription?.cancel();
-    _paymentService.disconnect();
+    unawaited(_paymentService.disconnect());
     super.dispose();
   }
 }
