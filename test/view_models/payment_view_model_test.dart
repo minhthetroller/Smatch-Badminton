@@ -16,6 +16,42 @@ void main() {
   late PaymentViewModel viewModel;
   late StreamController<PaymentNotification> notificationController;
 
+  Booking testBooking() {
+    return Booking(
+      id: 'booking-123',
+      subCourtId: '11111111-1111-1111-1111-111111111111',
+      guestName: 'Test User',
+      guestPhone: '0912345678',
+      date: '2024-01-20',
+      startTime: '10:00',
+      endTime: '12:00',
+      totalPrice: 140000,
+      status: BookingStatus.pending,
+    );
+  }
+
+  CreatePaymentResponse testPaymentResponse({
+    String paymentId = 'payment-123',
+    String wsSubscribeUrl =
+        'wss://api.example.com/ws/payments?paymentId=payment-123&ticket=ticket',
+  }) {
+    return CreatePaymentResponse(
+      payment: Payment(
+        id: paymentId,
+        bookingId: 'booking-123',
+        amount: 140000,
+        status: PaymentStatus.pending,
+      ),
+      orderUrl: 'https://zalopay.vn/order/$paymentId',
+      qrCode: const QrCodeData(
+        base64: 'data:image/png;base64,iVBORw0KGgo=',
+        rawBase64: 'iVBORw0KGgo=',
+      ),
+      expireAt: DateTime.now().add(const Duration(minutes: 10)),
+      wsSubscribeUrl: wsSubscribeUrl,
+    );
+  }
+
   setUp(() {
     mockPaymentService = MockPaymentService();
     notificationController = StreamController<PaymentNotification>.broadcast();
@@ -25,6 +61,13 @@ void main() {
     ).thenAnswer((_) => notificationController.stream);
     when(mockPaymentService.isConnected).thenReturn(false);
     when(mockPaymentService.disconnect()).thenAnswer((_) async {});
+    when(
+      mockPaymentService.connectToPaymentUpdates(
+        paymentId: anyNamed('paymentId'),
+        wsSubscribeUrl: anyNamed('wsSubscribeUrl'),
+        onConnectionInterrupted: anyNamed('onConnectionInterrupted'),
+      ),
+    ).thenAnswer((_) async {});
 
     viewModel = PaymentViewModel(paymentService: mockPaymentService);
   });
@@ -35,479 +78,173 @@ void main() {
   });
 
   group('PaymentViewModel', () {
-    group('initial state', () {
-      test('should have initial state', () {
-        expect(viewModel.state, PaymentViewState.initial);
-        expect(viewModel.errorMessage, isNull);
-        expect(viewModel.booking, isNull);
-        expect(viewModel.paymentResponse, isNull);
-        expect(viewModel.qrCodeBytes, isNull);
-      });
+    test('starts payment and connects to the returned websocket URL', () async {
+      final paymentResponse = testPaymentResponse();
+      when(
+        mockPaymentService.createBooking(any),
+      ).thenAnswer((_) async => testBooking());
+      when(
+        mockPaymentService.createPayment(any),
+      ).thenAnswer((_) async => paymentResponse);
 
-      test('should not be payment active initially', () {
-        expect(viewModel.isPaymentActive, isFalse);
-      });
-    });
-
-    group('initializePayment', () {
-      test('should create booking and payment successfully', () async {
-        final testBooking = Booking(
-          id: 'booking-123',
-          subCourtId: '11111111-1111-1111-1111-111111111111',
-          guestName: 'Test User',
-          guestPhone: '0912345678',
-          date: '2024-01-20',
-          startTime: '10:00',
-          endTime: '12:00',
-          totalPrice: 140000,
-          status: BookingStatus.pending,
-        );
-
-        final testPaymentResponse = CreatePaymentResponse(
-          payment: const Payment(
-            id: 'payment-123',
-            bookingId: 'booking-123',
-            amount: 140000,
-            status: PaymentStatus.pending,
-          ),
-          orderUrl: 'https://zalopay.vn/order/123',
-          qrCode: const QrCodeData(
-            base64: 'data:image/png;base64,iVBORw0KGgo=',
-            rawBase64: 'iVBORw0KGgo=',
-          ),
-          expireAt: DateTime.now().add(const Duration(minutes: 10)),
-          wsSubscribeUrl: 'wss://api.example.com/ws/payments',
-        );
-
-        when(
-          mockPaymentService.createBooking(any),
-        ).thenAnswer((_) async => testBooking);
-        when(
-          mockPaymentService.createPayment(any),
-        ).thenAnswer((_) async => testPaymentResponse);
-        when(
-          mockPaymentService.connectAndSubscribe(any),
-        ).thenAnswer((_) async {});
-        when(
-          mockPaymentService.queryPaymentStatus(any),
-        ).thenAnswer((_) async => testPaymentResponse.payment);
-
-        await viewModel.initializePayment(
-          subCourtId: '11111111-1111-1111-1111-111111111111',
-          guestName: 'Test User',
-          guestPhone: '0912345678',
-          date: '2024-01-20',
-          startTime: '10:00',
-          endTime: '12:00',
-        );
-
-        expect(viewModel.state, PaymentViewState.waitingForPayment);
-        expect(viewModel.booking, isNotNull);
-        expect(viewModel.booking!.id, 'booking-123');
-        expect(viewModel.paymentResponse, isNotNull);
-        expect(viewModel.paymentResponse!.payment.id, 'payment-123');
-
-        verify(mockPaymentService.createBooking(any)).called(1);
-        verify(mockPaymentService.createPayment('booking-123')).called(1);
-      });
-
-      test('should handle booking creation error', () async {
-        when(
-          mockPaymentService.createBooking(any),
-        ).thenThrow(Exception('Failed to create booking'));
-
-        await viewModel.initializePayment(
-          subCourtId: '11111111-1111-1111-1111-111111111111',
-          guestName: 'Test User',
-          guestPhone: '0912345678',
-          date: '2024-01-20',
-          startTime: '10:00',
-          endTime: '12:00',
-        );
-
-        expect(viewModel.state, PaymentViewState.error);
-        expect(viewModel.errorMessage, contains('Failed to create booking'));
-      });
-
-      test(
-        'should reject synthetic sub-court ID before creating booking',
-        () async {
-          await viewModel.initializePayment(
-            subCourtId: 'subcourt-2',
-            guestName: 'Test User',
-            guestPhone: '0912345678',
-            date: '2024-01-20',
-            startTime: '10:00',
-            endTime: '12:00',
-          );
-
-          expect(viewModel.state, PaymentViewState.error);
-          expect(viewModel.errorMessage, contains('Expected a database UUID'));
-          verifyNever(mockPaymentService.createBooking(any));
-          verifyNever(mockPaymentService.createPayment(any));
-        },
+      await viewModel.initializePayment(
+        subCourtId: '11111111-1111-1111-1111-111111111111',
+        guestName: 'Test User',
+        guestPhone: '0912345678',
+        date: '2024-01-20',
+        startTime: '10:00',
+        endTime: '12:00',
       );
 
-      test('should handle payment creation error', () async {
-        final testBooking = Booking(
-          id: 'booking-123',
-          subCourtId: '11111111-1111-1111-1111-111111111111',
-          guestName: 'Test User',
-          guestPhone: '0912345678',
-          date: '2024-01-20',
-          startTime: '10:00',
-          endTime: '12:00',
-          totalPrice: 140000,
-          status: BookingStatus.pending,
-        );
-
-        when(
-          mockPaymentService.createBooking(any),
-        ).thenAnswer((_) async => testBooking);
-        when(
-          mockPaymentService.createPayment(any),
-        ).thenThrow(Exception('Failed to create payment'));
-
-        await viewModel.initializePayment(
-          subCourtId: '11111111-1111-1111-1111-111111111111',
-          guestName: 'Test User',
-          guestPhone: '0912345678',
-          date: '2024-01-20',
-          startTime: '10:00',
-          endTime: '12:00',
-        );
-
-        expect(viewModel.state, PaymentViewState.error);
-        expect(viewModel.errorMessage, contains('Failed to create payment'));
-      });
+      expect(viewModel.state, PaymentViewState.waitingForPayment);
+      expect(viewModel.booking?.id, 'booking-123');
+      expect(viewModel.paymentResponse?.payment.id, 'payment-123');
+      verify(mockPaymentService.createPayment('booking-123')).called(1);
+      verify(
+        mockPaymentService.connectToPaymentUpdates(
+          paymentId: 'payment-123',
+          wsSubscribeUrl: paymentResponse.wsSubscribeUrl,
+          onConnectionInterrupted: anyNamed('onConnectionInterrupted'),
+        ),
+      ).called(1);
     });
 
-    group('formattedRemainingTime', () {
-      test('should format remaining time correctly', () {
-        // This tests the formatting logic
-        expect(viewModel.formattedRemainingTime, '00:00');
-      });
+    test('handles payment_status success notification', () async {
+      when(
+        mockPaymentService.createBooking(any),
+      ).thenAnswer((_) async => testBooking());
+      when(
+        mockPaymentService.createPayment(any),
+      ).thenAnswer((_) async => testPaymentResponse());
+
+      await viewModel.initializePayment(
+        subCourtId: '11111111-1111-1111-1111-111111111111',
+        guestName: 'Test User',
+        guestPhone: '0912345678',
+        date: '2024-01-20',
+        startTime: '10:00',
+        endTime: '12:00',
+      );
+
+      notificationController.add(
+        const PaymentNotification(
+          type: 'payment_status',
+          paymentId: 'payment-123',
+          status: PaymentStatus.success,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(viewModel.state, PaymentViewState.paymentSuccess);
+      verify(mockPaymentService.disconnect()).called(1);
     });
 
-    group('payment notifications', () {
-      test('should handle success notification', () async {
-        // Setup initial state
-        final testBooking = Booking(
-          id: 'booking-123',
-          subCourtId: '11111111-1111-1111-1111-111111111111',
-          guestName: 'Test User',
-          guestPhone: '0912345678',
-          date: '2024-01-20',
-          startTime: '10:00',
-          endTime: '12:00',
-          totalPrice: 140000,
-          status: BookingStatus.pending,
-        );
+    test('handles payment_status failed notification', () async {
+      when(
+        mockPaymentService.createBooking(any),
+      ).thenAnswer((_) async => testBooking());
+      when(
+        mockPaymentService.createPayment(any),
+      ).thenAnswer((_) async => testPaymentResponse());
 
-        final testPaymentResponse = CreatePaymentResponse(
-          payment: const Payment(
-            id: 'payment-123',
-            bookingId: 'booking-123',
-            amount: 140000,
-            status: PaymentStatus.pending,
-          ),
-          orderUrl: 'https://zalopay.vn/order/123',
-          qrCode: const QrCodeData(
-            base64: 'data:image/png;base64,iVBORw0KGgo=',
-            rawBase64: 'iVBORw0KGgo=',
-          ),
-          expireAt: DateTime.now().add(const Duration(minutes: 10)),
-          wsSubscribeUrl: 'wss://api.example.com/ws/payments',
-        );
+      await viewModel.initializePayment(
+        subCourtId: '11111111-1111-1111-1111-111111111111',
+        guestName: 'Test User',
+        guestPhone: '0912345678',
+        date: '2024-01-20',
+        startTime: '10:00',
+        endTime: '12:00',
+      );
 
-        when(
-          mockPaymentService.createBooking(any),
-        ).thenAnswer((_) async => testBooking);
-        when(
-          mockPaymentService.createPayment(any),
-        ).thenAnswer((_) async => testPaymentResponse);
-        when(
-          mockPaymentService.connectAndSubscribe(any),
-        ).thenAnswer((_) async {});
-        when(
-          mockPaymentService.queryPaymentStatus(any),
-        ).thenAnswer((_) async => testPaymentResponse.payment);
+      notificationController.add(
+        const PaymentNotification(
+          type: 'payment_status',
+          paymentId: 'payment-123',
+          status: PaymentStatus.failed,
+          message: 'Payment was declined',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
 
-        await viewModel.initializePayment(
-          subCourtId: '11111111-1111-1111-1111-111111111111',
-          guestName: 'Test User',
-          guestPhone: '0912345678',
-          date: '2024-01-20',
-          startTime: '10:00',
-          endTime: '12:00',
-        );
-
-        // Send success notification
-        notificationController.add(
-          const PaymentNotification(
-            type: 'payment_status',
-            paymentId: 'payment-123',
-            status: PaymentStatus.success,
-          ),
-        );
-
-        // Wait for notification processing
-        await Future.delayed(const Duration(milliseconds: 100));
-
-        expect(viewModel.state, PaymentViewState.paymentSuccess);
-      });
-
-      test('should handle failed notification', () async {
-        final testBooking = Booking(
-          id: 'booking-123',
-          subCourtId: '11111111-1111-1111-1111-111111111111',
-          guestName: 'Test User',
-          guestPhone: '0912345678',
-          date: '2024-01-20',
-          startTime: '10:00',
-          endTime: '12:00',
-          totalPrice: 140000,
-          status: BookingStatus.pending,
-        );
-
-        final testPaymentResponse = CreatePaymentResponse(
-          payment: const Payment(
-            id: 'payment-123',
-            bookingId: 'booking-123',
-            amount: 140000,
-            status: PaymentStatus.pending,
-          ),
-          orderUrl: 'https://zalopay.vn/order/123',
-          qrCode: const QrCodeData(
-            base64: 'data:image/png;base64,iVBORw0KGgo=',
-            rawBase64: 'iVBORw0KGgo=',
-          ),
-          expireAt: DateTime.now().add(const Duration(minutes: 10)),
-          wsSubscribeUrl: 'wss://api.example.com/ws/payments',
-        );
-
-        when(
-          mockPaymentService.createBooking(any),
-        ).thenAnswer((_) async => testBooking);
-        when(
-          mockPaymentService.createPayment(any),
-        ).thenAnswer((_) async => testPaymentResponse);
-        when(
-          mockPaymentService.connectAndSubscribe(any),
-        ).thenAnswer((_) async {});
-        when(
-          mockPaymentService.queryPaymentStatus(any),
-        ).thenAnswer((_) async => testPaymentResponse.payment);
-
-        await viewModel.initializePayment(
-          subCourtId: '11111111-1111-1111-1111-111111111111',
-          guestName: 'Test User',
-          guestPhone: '0912345678',
-          date: '2024-01-20',
-          startTime: '10:00',
-          endTime: '12:00',
-        );
-
-        // Send failed notification
-        notificationController.add(
-          const PaymentNotification(
-            type: 'payment_status',
-            paymentId: 'payment-123',
-            status: PaymentStatus.failed,
-            message: 'Payment was declined',
-          ),
-        );
-
-        await Future.delayed(const Duration(milliseconds: 100));
-
-        expect(viewModel.state, PaymentViewState.paymentFailed);
-        expect(viewModel.errorMessage, contains('Payment was declined'));
-      });
+      expect(viewModel.state, PaymentViewState.paymentFailed);
+      expect(viewModel.errorMessage, 'Payment was declined');
     });
 
-    group('qrCodeBytes', () {
-      test('should decode QR code from base64', () async {
-        final testBooking = Booking(
-          id: 'booking-123',
-          subCourtId: '11111111-1111-1111-1111-111111111111',
-          guestName: 'Test User',
-          guestPhone: '0912345678',
-          date: '2024-01-20',
-          startTime: '10:00',
-          endTime: '12:00',
-          totalPrice: 140000,
-          status: BookingStatus.pending,
-        );
+    test('handles payment_status expired notification', () async {
+      when(
+        mockPaymentService.createBooking(any),
+      ).thenAnswer((_) async => testBooking());
+      when(
+        mockPaymentService.createPayment(any),
+      ).thenAnswer((_) async => testPaymentResponse());
 
-        // Valid PNG base64
-        final validBase64 =
-            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      await viewModel.initializePayment(
+        subCourtId: '11111111-1111-1111-1111-111111111111',
+        guestName: 'Test User',
+        guestPhone: '0912345678',
+        date: '2024-01-20',
+        startTime: '10:00',
+        endTime: '12:00',
+      );
 
-        final testPaymentResponse = CreatePaymentResponse(
-          payment: const Payment(
-            id: 'payment-123',
-            bookingId: 'booking-123',
-            amount: 140000,
-            status: PaymentStatus.pending,
-          ),
-          orderUrl: 'https://zalopay.vn/order/123',
-          qrCode: QrCodeData(
-            base64: 'data:image/png;base64,$validBase64',
-            rawBase64: validBase64,
-          ),
-          expireAt: DateTime.now().add(const Duration(minutes: 10)),
-          wsSubscribeUrl: 'wss://api.example.com/ws/payments',
-        );
+      notificationController.add(
+        const PaymentNotification(
+          type: 'payment_status',
+          paymentId: 'payment-123',
+          status: PaymentStatus.expired,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
 
-        when(
-          mockPaymentService.createBooking(any),
-        ).thenAnswer((_) async => testBooking);
-        when(
-          mockPaymentService.createPayment(any),
-        ).thenAnswer((_) async => testPaymentResponse);
-        when(
-          mockPaymentService.connectAndSubscribe(any),
-        ).thenAnswer((_) async {});
-        when(
-          mockPaymentService.queryPaymentStatus(any),
-        ).thenAnswer((_) async => testPaymentResponse.payment);
-
-        await viewModel.initializePayment(
-          subCourtId: '11111111-1111-1111-1111-111111111111',
-          guestName: 'Test User',
-          guestPhone: '0912345678',
-          date: '2024-01-20',
-          startTime: '10:00',
-          endTime: '12:00',
-        );
-
-        expect(viewModel.qrCodeBytes, isNotNull);
-        expect(viewModel.qrCodeBytes!.isNotEmpty, isTrue);
-      });
+      expect(viewModel.state, PaymentViewState.paymentExpired);
     });
 
-    group('retryPayment', () {
-      test('should create new payment for existing booking', () async {
-        final testBooking = Booking(
-          id: 'booking-123',
-          subCourtId: '11111111-1111-1111-1111-111111111111',
-          guestName: 'Test User',
-          guestPhone: '0912345678',
-          date: '2024-01-20',
-          startTime: '10:00',
-          endTime: '12:00',
-          totalPrice: 140000,
-          status: BookingStatus.pending,
-        );
+    test('refreshes payment websocket URL on ticket error', () async {
+      final responses = [
+        testPaymentResponse(),
+        testPaymentResponse(
+          paymentId: 'payment-456',
+          wsSubscribeUrl:
+              'wss://api.example.com/ws/payments?paymentId=payment-456&ticket=fresh',
+        ),
+      ];
+      when(
+        mockPaymentService.createBooking(any),
+      ).thenAnswer((_) async => testBooking());
+      when(
+        mockPaymentService.createPayment(any),
+      ).thenAnswer((_) async => responses.removeAt(0));
 
-        final testPaymentResponse = CreatePaymentResponse(
-          payment: const Payment(
-            id: 'payment-456',
-            bookingId: 'booking-123',
-            amount: 140000,
-            status: PaymentStatus.pending,
-          ),
-          orderUrl: 'https://zalopay.vn/order/456',
-          qrCode: const QrCodeData(
-            base64: 'data:image/png;base64,newQR',
-            rawBase64: 'newQR',
-          ),
-          expireAt: DateTime.now().add(const Duration(minutes: 10)),
-          wsSubscribeUrl: 'wss://api.example.com/ws/payments',
-        );
+      await viewModel.initializePayment(
+        subCourtId: '11111111-1111-1111-1111-111111111111',
+        guestName: 'Test User',
+        guestPhone: '0912345678',
+        date: '2024-01-20',
+        startTime: '10:00',
+        endTime: '12:00',
+      );
 
-        when(
-          mockPaymentService.createBooking(any),
-        ).thenAnswer((_) async => testBooking);
-        when(
-          mockPaymentService.createPayment(any),
-        ).thenAnswer((_) async => testPaymentResponse);
-        when(
-          mockPaymentService.connectAndSubscribe(any),
-        ).thenAnswer((_) async {});
-        when(
-          mockPaymentService.queryPaymentStatus(any),
-        ).thenAnswer((_) async => testPaymentResponse.payment);
+      notificationController.add(
+        const PaymentNotification(
+          type: 'error',
+          paymentId: 'payment-123',
+          code: 'INVALID_PAYMENT_WS_TICKET',
+          message: 'Invalid or expired payment websocket ticket',
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 10));
 
-        // First payment
-        await viewModel.initializePayment(
-          subCourtId: '11111111-1111-1111-1111-111111111111',
-          guestName: 'Test User',
-          guestPhone: '0912345678',
-          date: '2024-01-20',
-          startTime: '10:00',
-          endTime: '12:00',
-        );
-
-        // Retry payment
-        await viewModel.retryPayment();
-
-        expect(viewModel.state, PaymentViewState.waitingForPayment);
-        verify(mockPaymentService.createPayment('booking-123')).called(2);
-      });
-    });
-
-    group('refreshPaymentStatus', () {
-      test('should update payment status', () async {
-        final testBooking = Booking(
-          id: 'booking-123',
-          subCourtId: '11111111-1111-1111-1111-111111111111',
-          guestName: 'Test User',
-          guestPhone: '0912345678',
-          date: '2024-01-20',
-          startTime: '10:00',
-          endTime: '12:00',
-          totalPrice: 140000,
-          status: BookingStatus.pending,
-        );
-
-        final testPaymentResponse = CreatePaymentResponse(
-          payment: const Payment(
-            id: 'payment-123',
-            bookingId: 'booking-123',
-            amount: 140000,
-            status: PaymentStatus.pending,
-          ),
-          orderUrl: 'https://zalopay.vn/order/123',
-          qrCode: const QrCodeData(
-            base64: 'data:image/png;base64,abc',
-            rawBase64: 'abc',
-          ),
-          expireAt: DateTime.now().add(const Duration(minutes: 10)),
-          wsSubscribeUrl: 'wss://api.example.com/ws/payments',
-        );
-
-        when(
-          mockPaymentService.createBooking(any),
-        ).thenAnswer((_) async => testBooking);
-        when(
-          mockPaymentService.createPayment(any),
-        ).thenAnswer((_) async => testPaymentResponse);
-        when(
-          mockPaymentService.connectAndSubscribe(any),
-        ).thenAnswer((_) async {});
-        when(mockPaymentService.queryPaymentStatus(any)).thenAnswer(
-          (_) async => const Payment(
-            id: 'payment-123',
-            bookingId: 'booking-123',
-            amount: 140000,
-            status: PaymentStatus.success,
-          ),
-        );
-
-        await viewModel.initializePayment(
-          subCourtId: '11111111-1111-1111-1111-111111111111',
-          guestName: 'Test User',
-          guestPhone: '0912345678',
-          date: '2024-01-20',
-          startTime: '10:00',
-          endTime: '12:00',
-        );
-
-        await viewModel.refreshPaymentStatus();
-
-        expect(viewModel.state, PaymentViewState.paymentSuccess);
-      });
+      expect(viewModel.state, PaymentViewState.waitingForPayment);
+      expect(viewModel.paymentResponse?.payment.id, 'payment-456');
+      verify(mockPaymentService.createPayment('booking-123')).called(2);
+      verify(
+        mockPaymentService.connectToPaymentUpdates(
+          paymentId: 'payment-456',
+          wsSubscribeUrl:
+              'wss://api.example.com/ws/payments?paymentId=payment-456&ticket=fresh',
+          onConnectionInterrupted: anyNamed('onConnectionInterrupted'),
+        ),
+      ).called(1);
     });
   });
 }

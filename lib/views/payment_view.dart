@@ -101,33 +101,52 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
   // Cache QR code bytes to prevent re-decoding on each rebuild
   Uint8List? _cachedQrBytes;
   String? _lastQrBase64;
+  bool _navigated = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final viewModel = context.read<PaymentViewModel>();
+      viewModel.addListener(_onViewModelChanged);
+      _onViewModelChanged();
+    });
+  }
+
+  @override
+  void dispose() {
+    // ignore: use_build_context_synchronously
+    context.read<PaymentViewModel>().removeListener(_onViewModelChanged);
+    super.dispose();
+  }
+
+  void _onViewModelChanged() {
+    if (!mounted || _navigated) return;
+    final viewModel = context.read<PaymentViewModel>();
+    if (viewModel.state == PaymentViewState.paymentSuccess) {
+      _navigated = true;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => BookingSuccessView(
+            court: widget.court,
+            formattedDate: widget.formattedDate,
+            summaries: widget.summaries,
+            totalPrice: widget.totalPrice,
+            guestName: widget.guestName,
+            guestPhone: widget.guestPhone,
+            bookingId: viewModel.booking?.id ?? '',
+          ),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Only listen to state changes for navigation
+    // Only listen to state changes for displaying the correct body
     final state = context.select<PaymentViewModel, PaymentViewState>(
       (vm) => vm.state,
     );
-    final viewModel = context.read<PaymentViewModel>();
-
-    // Navigate to success screen when payment is successful
-    if (state == PaymentViewState.paymentSuccess) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => BookingSuccessView(
-              court: widget.court,
-              formattedDate: widget.formattedDate,
-              summaries: widget.summaries,
-              totalPrice: widget.totalPrice,
-              guestName: widget.guestName,
-              guestPhone: widget.guestPhone,
-              bookingId: viewModel.booking?.id ?? '',
-            ),
-          ),
-        );
-      });
-    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -136,7 +155,7 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: AppTheme.textPrimary),
-          onPressed: () => _handleBackPress(context, viewModel),
+          onPressed: () => _handleBackPress(context),
         ),
         title: const Text(
           'Payment',
@@ -152,7 +171,8 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
     );
   }
 
-  void _handleBackPress(BuildContext context, PaymentViewModel viewModel) {
+  void _handleBackPress(BuildContext context) {
+    final viewModel = context.read<PaymentViewModel>();
     if (viewModel.isPaymentActive) {
       _showCancelConfirmation(context);
     } else {
@@ -272,10 +292,6 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
 
           // Instructions card - static content
           _buildInstructionsCard(),
-          const SizedBox(height: 20),
-
-          // Refresh button
-          _buildRefreshButton(context),
         ],
       ),
     );
@@ -461,17 +477,6 @@ class _PaymentViewContentState extends State<_PaymentViewContent> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildRefreshButton(BuildContext context) {
-    return TextButton.icon(
-      onPressed: () => context.read<PaymentViewModel>().refreshPaymentStatus(),
-      icon: Icon(Icons.refresh, color: Colors.grey.shade600, size: 18),
-      label: Text(
-        'Already paid? Tap to refresh',
-        style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-      ),
     );
   }
 

@@ -1,17 +1,28 @@
 import '../config/env.dart';
 
-/// Helper class for transforming image URLs to use backend S3 proxy
+/// Helper class for transforming image URLs for local development
 ///
-/// Transforms LocalStack S3 URLs to use the backend's S3 proxy endpoint,
-/// which is accessible via ngrok in development.
+/// In local development the backend stores images in LocalStack S3 and
+/// returns URLs like `http://localhost:4566/<bucket>/<key>`. LocalStack S3
+/// is directly reachable from the app, so these URLs are returned unchanged.
 ///
-/// Example transformations:
-/// - Input:  http://localhost:4566/smatch-photos/users/123/profile.jpg
-/// - Output: https://your-ngrok-url.ngrok.io/api/s3-proxy/smatch-photos/users/123/profile.jpg
+/// Real AWS S3 URLs (`https://<bucket>.s3.amazonaws.com/<key>`) cannot be
+/// resolved in local development, so they are routed through the backend's
+/// S3 proxy at `/api/s3-proxy/` when one is available. If the backend does
+/// not expose an S3 proxy, the URLs are still returned transformed and will
+/// simply fail to load — the backend should be configured to return
+/// directly reachable URLs instead.
 class ImageUrlHelper {
-  static final RegExp _localS3Pattern = RegExp(
-    r'^http://(localhost|127\.0\.0\.1|localstack|s3\.localhost\.localstack\.cloud):4566/',
+  /// Virtual-hosted-style: `https://<bucket>.s3.amazonaws.com/<key>`
+  static final RegExp _virtualHostedS3Pattern = RegExp(
+    r'^https://([a-z0-9][a-z0-9.\-]*)\.s3(?:\.[a-z0-9-]+)?\.amazonaws\.com/',
   );
+
+  /// Path-style: `https://s3.amazonaws.com/<bucket>/<key>`
+  static final RegExp _pathStyleS3Pattern = RegExp(
+    r'^https://s3(?:\.[a-z0-9-]+)?\.amazonaws\.com/',
+  );
+
   static const String _s3ProxyPath = '/api/s3-proxy/';
 
   /// Headers required for loading images through ngrok proxy.
@@ -24,24 +35,34 @@ class ImageUrlHelper {
     return {};
   }
 
-  /// Transform S3 image URL to use backend proxy
+  /// Transform an image URL for the current environment.
   ///
-  /// If the URL contains a LocalStack S3 host, it replaces it with the API
-  /// base URL and adds the /api/s3-proxy/ path.
+  /// LocalStack S3 URLs (`http://localhost:4566/...`) are returned unchanged
+  /// because LocalStack is directly reachable in local development.
   ///
-  /// Otherwise, returns the URL unchanged.
+  /// Real AWS S3 URLs (virtual-hosted and path-style) are routed through the
+  /// backend's S3 proxy at `/api/s3-proxy/` since the S3 hostname is not
+  /// resolvable in local development.
+  ///
+  /// URLs already using the proxy path or external CDN URLs are returned
+  /// unchanged.
   static String transformImageUrl(String url) {
-    final match = _localS3Pattern.firstMatch(url);
-    if (match != null) {
-      // Extract the bucket and key from the LocalStack URL.
-      final path = url.substring(match.end);
+    // Virtual-hosted-style S3 — bucket is in the host, path is <key>
+    final vhostMatch = _virtualHostedS3Pattern.firstMatch(url);
+    if (vhostMatch != null) {
+      final bucket = vhostMatch.group(1)!;
+      final key = url.substring(vhostMatch.end);
+      return '${Env.apiBaseUrl}$_s3ProxyPath$bucket/$key';
+    }
 
-      // Construct proxied URL through backend
-      // Format: https://api-base-url/api/s3-proxy/bucket/key/path
+    // Path-style S3 — bucket is the first segment of the path
+    final pathMatch = _pathStyleS3Pattern.firstMatch(url);
+    if (pathMatch != null) {
+      final path = url.substring(pathMatch.end);
       return '${Env.apiBaseUrl}$_s3ProxyPath$path';
     }
 
-    // If already using proxy path or external URL, return as-is
+    // LocalStack S3, already-proxied URLs, and external URLs are returned as-is
     return url;
   }
 

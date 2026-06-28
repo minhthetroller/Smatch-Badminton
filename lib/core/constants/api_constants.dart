@@ -7,18 +7,6 @@ class ApiConstants {
   /// Base URL for the API server loaded from environment
   static String get baseUrl => Env.apiBaseUrl;
 
-  /// WebSocket URL for the API server
-  static String get wsUrl {
-    final url = baseUrl;
-    // Convert https:// to wss:// or http:// to ws://
-    if (url.startsWith('https://')) {
-      return url.replaceFirst('https://', 'wss://');
-    } else if (url.startsWith('http://')) {
-      return url.replaceFirst('http://', 'ws://');
-    }
-    return 'wss://${url.replaceFirst(RegExp(r'^https?://'), '')}';
-  }
-
   /// API endpoints
   static const String healthCheck = '/health';
   static const String courts = '/api/courts';
@@ -50,17 +38,12 @@ class ApiConstants {
   /// Get payment by ID
   static String paymentById(String id) => '/api/payments/$id';
 
-  /// Get payment status
-  static String paymentStatus(String id) => '/api/payments/$id/status';
-
   /// Get booking by ID
   static String bookingById(String id) => '/api/bookings/$id';
 
   /// Get payment for booking
-  static String bookingPayment(String bookingId) => '/api/bookings/$bookingId/payment';
-
-  /// WebSocket endpoint for payment updates
-  static String get wsPayments => '$wsUrl/ws/payments';
+  static String bookingPayment(String bookingId) =>
+      '/api/bookings/$bookingId/payment';
 
   /// Court availability endpoint pattern: /api/courts/:courtId/availability
   static String courtAvailability(String courtId) =>
@@ -90,7 +73,8 @@ class ApiConstants {
   static String matchLeave(String id) => '/api/matches/$id/leave';
 
   /// Get join requests for a match (host only)
-  static String matchJoinRequests(String matchId) => '/api/matches/$matchId/requests';
+  static String matchJoinRequests(String matchId) =>
+      '/api/matches/$matchId/requests';
 
   /// Respond to a join request
   static String matchRespondToRequest(String matchId, String playerId) =>
@@ -98,10 +82,6 @@ class ApiConstants {
 
   /// Create payment for joining a match
   static String matchPayment(String matchId) => '/api/matches/$matchId/payment';
-
-  /// Query match payment status
-  static String matchPaymentStatus(String matchId, String paymentId) =>
-      '/api/matches/$matchId/payment/$paymentId/status';
 
   /// FCM token endpoints
   static const String authFcmToken = '/api/auth/fcm-token';

@@ -276,8 +276,6 @@ class ApiService {
             String mimeType = 'image/jpeg';
             if (filename.toLowerCase().endsWith('.png')) {
               mimeType = 'image/png';
-            } else if (filename.toLowerCase().endsWith('.webp')) {
-              mimeType = 'image/webp';
             }
 
             final multipartFile = await http.MultipartFile.fromPath(
@@ -356,8 +354,6 @@ class ApiService {
             String mimeType = 'image/jpeg';
             if (filename.toLowerCase().endsWith('.png')) {
               mimeType = 'image/png';
-            } else if (filename.toLowerCase().endsWith('.webp')) {
-              mimeType = 'image/webp';
             }
 
             final multipartFile = await http.MultipartFile.fromPath(

@@ -289,67 +289,6 @@ void main() {
       });
     });
 
-    group('queryPaymentStatus', () {
-      test('should query and return updated payment status', () async {
-        when(mockApiService.get(any)).thenAnswer(
-          (_) async => {
-            'success': true,
-            'data': {
-              'id': 'payment-123',
-              'bookingId': 'booking-456',
-              'amount': 140000,
-              'status': 'success',
-            },
-          },
-        );
-
-        final payment = await paymentService.queryPaymentStatus('payment-123');
-
-        expect(payment.id, 'payment-123');
-        expect(payment.status, PaymentStatus.success);
-
-        verify(
-          mockApiService.get('/api/payments/payment-123/status'),
-        ).called(1);
-      });
-
-      test('should return expired status', () async {
-        when(mockApiService.get(any)).thenAnswer(
-          (_) async => {
-            'success': true,
-            'data': {
-              'id': 'payment-123',
-              'bookingId': 'booking-456',
-              'amount': 140000,
-              'status': 'expired',
-            },
-          },
-        );
-
-        final payment = await paymentService.queryPaymentStatus('payment-123');
-
-        expect(payment.status, PaymentStatus.expired);
-      });
-
-      test('should return failed status', () async {
-        when(mockApiService.get(any)).thenAnswer(
-          (_) async => {
-            'success': true,
-            'data': {
-              'id': 'payment-123',
-              'bookingId': 'booking-456',
-              'amount': 140000,
-              'status': 'failed',
-            },
-          },
-        );
-
-        final payment = await paymentService.queryPaymentStatus('payment-123');
-
-        expect(payment.status, PaymentStatus.failed);
-      });
-    });
-
     group('getBooking', () {
       test('should get booking by ID', () async {
         when(mockApiService.get(any)).thenAnswer(

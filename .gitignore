@@ -49,4 +49,5 @@ app.*.map.json
 # Note: .env.example should be committed as a template
 
 # documentation
+docs/
 api-docs.json
